@@ -7,6 +7,7 @@ import AppShell from "./AppShell";
 import AttachmentPreviewModal from "./AttachmentPreviewModal";
 import {
   ATTACHMENT_TYPES,
+  formatAttachmentFileName,
   STUDENT_STATUSES,
   StudentAttachment,
   StudentRecord,
@@ -210,7 +211,11 @@ export default function StudentDetailClient({
                         onClick={() =>
                           setPreviewItem({
                             fileUrl: student.photo_path!,
-                            fileName: `${student.applicant_name}-Photo.jpg`,
+                            fileName: formatAttachmentFileName(
+                              student.applicant_name,
+                              "Applicant Photo",
+                              student.photo_path!
+                            ),
                             title: `${student.applicant_name} — Applicant Photo`,
                             mimeType: "image/jpeg",
                           })
@@ -222,8 +227,17 @@ export default function StudentDetailClient({
                       </button>
                       <a
                         href={`${student.photo_path}?download=1&name=${encodeURIComponent(
-                          `${student.applicant_name}-Photo.jpg`
+                          formatAttachmentFileName(
+                            student.applicant_name,
+                            "Applicant Photo",
+                            student.photo_path
+                          )
                         )}`}
+                        download={formatAttachmentFileName(
+                          student.applicant_name,
+                          "Applicant Photo",
+                          student.photo_path
+                        )}
                         className="px-2 py-1 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 text-[11px] font-semibold transition flex items-center gap-1"
                       >
                         <Download className="w-3 h-3" />
@@ -615,10 +629,15 @@ export default function StudentDetailClient({
                     ) : (
                       <div className="space-y-2">
                         {files.map((att) => {
+                          const formattedFileName = formatAttachmentFileName(
+                            student.applicant_name,
+                            att.title || config.label,
+                            att.file_path || att.file_name
+                          );
                           const downloadHref = `${att.file_path}${
                             att.file_path.includes("?") ? "&" : "?"
                           }download=1&name=${encodeURIComponent(
-                            att.file_name
+                            formattedFileName
                           )}`;
 
                           return (
@@ -633,7 +652,7 @@ export default function StudentDetailClient({
                                   </div>
                                 )}
                                 <div className="text-xs text-slate-600 truncate">
-                                  {att.file_name}
+                                  {formattedFileName}
                                 </div>
                               </div>
 
@@ -643,7 +662,7 @@ export default function StudentDetailClient({
                                   onClick={() =>
                                     setPreviewItem({
                                       fileUrl: att.file_path,
-                                      fileName: att.file_name,
+                                      fileName: formattedFileName,
                                       title: att.title || config.label,
                                       mimeType: att.mime_type,
                                     })
@@ -656,7 +675,7 @@ export default function StudentDetailClient({
 
                                 <a
                                   href={downloadHref}
-                                  download={att.file_name}
+                                  download={formattedFileName}
                                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition"
                                 >
                                   <Download className="w-3.5 h-3.5" />

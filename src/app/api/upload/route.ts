@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const folderRaw = (formData.get("folder") as string) || "attachments";
+    const customNameRaw = ((formData.get("custom_name") as string) || "").trim();
     const folder: UploadFolder =
       folderRaw === "photos" ? "photos" : "attachments";
 
@@ -61,6 +62,11 @@ export async function POST(req: NextRequest) {
 
     const originalName = file.name || "document";
     const ext = path.extname(originalName).toLowerCase() || ".bin";
+    const displayFileName = customNameRaw
+      ? customNameRaw.toLowerCase().endsWith(ext)
+        ? customNameRaw
+        : `${customNameRaw}${ext}`
+      : originalName;
 
     if (folder === "photos" && !/\.(jpg|jpeg|png|webp|gif)$/i.test(ext)) {
       return NextResponse.json(
@@ -86,16 +92,16 @@ export async function POST(req: NextRequest) {
 
     // Safe ASCII filename for Ubuntu Linux / Windows filesystem
     const baseName = path
-      .basename(originalName, ext)
+      .basename(displayFileName, ext)
       .replace(/[^a-zA-Z0-9_-]/g, "_")
       .replace(/_+/g, "_")
       .replace(/^_|_$/g, "")
-      .slice(0, 50);
+      .slice(0, 70);
 
     const uniqueSuffix = `${Date.now()}-${Math.random()
       .toString(36)
-      .slice(2, 9)}`;
-    const storedFileName = `${uniqueSuffix}-${baseName || "file"}${ext}`;
+      .slice(2, 7)}`;
+    const storedFileName = `${baseName || "file"}-${uniqueSuffix}${ext}`;
 
     const uploadDir = await ensureUploadFolder(folder);
     const destPath = path.join(uploadDir, storedFileName);
@@ -107,7 +113,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       file: {
-        file_name: originalName,
+        file_name: displayFileName,
         file_path: filePathUrl,
         mime_type: file.type || "application/octet-stream",
         file_size: file.size,

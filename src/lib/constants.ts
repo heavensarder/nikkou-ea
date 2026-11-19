@@ -145,6 +145,37 @@ export const ATTACHMENT_TYPES: AttachmentConfig[] = [
   },
 ];
 
+export function getAttachmentLabel(key: string): string {
+  const found = ATTACHMENT_TYPES.find((t) => t.key === key);
+  return found ? found.label : "Document";
+}
+
+export function getFileExtension(fileNameOrPath: string): string {
+  if (!fileNameOrPath) return "";
+  const clean = fileNameOrPath.split("?")[0];
+  const lastDot = clean.lastIndexOf(".");
+  if (lastDot === -1 || lastDot === clean.length - 1) return "";
+  return clean.slice(lastDot).toLowerCase();
+}
+
+export function formatAttachmentFileName(
+  applicantName: string,
+  attachmentTitleOrLabel: string,
+  originalFileNameOrPath: string
+): string {
+  const ext = getFileExtension(originalFileNameOrPath);
+  const namePart = (applicantName || "Student").trim();
+  const titlePart = (attachmentTitleOrLabel || "Document").trim();
+
+  const combined = titlePart
+    .toLowerCase()
+    .startsWith(namePart.toLowerCase())
+    ? titlePart
+    : `${namePart} ${titlePart}`;
+
+  return `${combined.replace(/\s+/g, " ").trim()}${ext}`;
+}
+
 export interface PaymentInstallment {
   id?: number;
   amount: number;

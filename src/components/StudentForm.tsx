@@ -4,7 +4,9 @@ import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ATTACHMENT_TYPES,
+  formatAttachmentFileName,
   GENDER_OPTIONS,
+  getAttachmentLabel,
   JOB_CATEGORIES,
   JobProgramType,
   PaymentInstallment,
@@ -329,6 +331,10 @@ export default function StudentForm({
       const formData = new FormData();
       formData.append("file", file);
       formData.append("folder", "photos");
+      formData.append(
+        "custom_name",
+        formatAttachmentFileName(applicantName, "Applicant Photo", file.name)
+      );
 
       const res = await fetch("/api/upload", {
         method: "POST",
@@ -381,12 +387,31 @@ export default function StudentForm({
     try {
       const uploadedItems: FormAttachmentItem[] = [];
       const defaultTitle = (pendingTitles[attachmentKey] || "").trim();
+      const categoryLabel = getAttachmentLabel(attachmentKey);
+      const existingCount = attachments.filter(
+        (a) => a.attachment_type === attachmentKey
+      ).length;
 
       for (let i = 0; i < targetFiles.length; i++) {
         const file = targetFiles[i];
+        const itemTitle = requiresTitle
+          ? defaultTitle
+            ? targetFiles.length > 1
+              ? `${defaultTitle} ${i + 1}`
+              : defaultTitle
+            : `${categoryLabel} ${existingCount + i + 1}`
+          : "";
+
+        const formattedName = formatAttachmentFileName(
+          applicantName,
+          itemTitle || categoryLabel,
+          file.name
+        );
+
         const formData = new FormData();
         formData.append("file", file);
         formData.append("folder", "attachments");
+        formData.append("custom_name", formattedName);
 
         const res = await fetch("/api/upload", {
           method: "POST",
@@ -397,20 +422,11 @@ export default function StudentForm({
           throw new Error(data.error || `Failed to upload ${file.name}`);
         }
 
-        const cleanFileTitle = file.name.replace(/\.[^/.]+$/, "");
-        const itemTitle = requiresTitle
-          ? defaultTitle
-            ? targetFiles.length > 1
-              ? `${defaultTitle} (${i + 1})`
-              : defaultTitle
-            : cleanFileTitle
-          : "";
-
         uploadedItems.push({
           tempId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           attachment_type: attachmentKey,
           title: itemTitle,
-          file_name: data.file.file_name,
+          file_name: formattedName,
           file_path: data.file.file_path,
           mime_type: data.file.mime_type,
           file_size: data.file.file_size,
@@ -452,7 +468,17 @@ export default function StudentForm({
   function handleUpdateAttachmentTitle(tempId: string, newTitle: string) {
     setAttachments((prev) =>
       prev.map((att) =>
-        att.tempId === tempId ? { ...att, title: newTitle } : att
+        att.tempId === tempId
+          ? {
+              ...att,
+              title: newTitle,
+              file_name: formatAttachmentFileName(
+                applicantName,
+                newTitle || getAttachmentLabel(att.attachment_type),
+                att.file_path || att.file_name
+              ),
+            }
+          : att
       )
     );
   }
@@ -553,7 +579,11 @@ export default function StudentForm({
         attachments: attachments.map((a) => ({
           attachment_type: a.attachment_type,
           title: a.title || null,
-          file_name: a.file_name,
+          file_name: formatAttachmentFileName(
+            applicantName,
+            a.title || getAttachmentLabel(a.attachment_type),
+            a.file_path || a.file_name
+          ),
           file_path: a.file_path,
           mime_type: a.mime_type,
           file_size: a.file_size,
@@ -1639,9 +1669,14 @@ export default function StudentForm({
                   {matchingFiles.length > 0 && (
                     <div className="mt-3 space-y-2">
                       {matchingFiles.map((att) => {
+                        const formattedFileName = formatAttachmentFileName(
+                          applicantName,
+                          att.title || config.label,
+                          att.file_path || att.file_name
+                        );
                         const downloadHref = `${att.file_path}${
                           att.file_path.includes("?") ? "&" : "?"
-                        }download=1&name=${encodeURIComponent(att.file_name)}`;
+                        }download=1&name=${encodeURIComponent(formattedFileName)}`;
 
                         return (
                           <div
@@ -1666,7 +1701,7 @@ export default function StudentForm({
                               <div className="flex items-center gap-2 min-w-0">
                                 <FileText className="w-4 h-4 text-secondary shrink-0" />
                                 <span className="text-xs font-medium text-slate-700 truncate">
-                                  {att.file_name}
+                                  {formattedFileName}
                                 </span>
                                 <span className="text-[10px] text-slate-400 shrink-0">
                                   ({formatFileSize(att.file_size)})
@@ -1681,7 +1716,7 @@ export default function StudentForm({
                                 onClick={() =>
                                   setPreviewItem({
                                     fileUrl: att.file_path,
-                                    fileName: att.file_name,
+                                    fileName: formattedFileName,
                                     title: att.title || config.label,
                                     mimeType: att.mime_type,
                                   })
@@ -1695,7 +1730,7 @@ export default function StudentForm({
 
                               <a
                                 href={downloadHref}
-                                download={att.file_name}
+                                download={formattedFileName}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold transition"
                                 title="Download Attachment"
                               >
