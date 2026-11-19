@@ -110,6 +110,21 @@ export async function PUT(
     try {
       await conn.beginTransaction();
 
+      // Check existing photo and attachments before update so removed files are deleted from disk
+      const [oldStudentRows] = await conn.query<RowDataPacket[]>(
+        "SELECT photo_path FROM students WHERE id = ?",
+        [studentId]
+      );
+      const oldPhotoPath: string | null = oldStudentRows[0]?.photo_path || null;
+
+      const [oldAttRows] = await conn.query<RowDataPacket[]>(
+        "SELECT file_path FROM student_attachments WHERE student_id = ?",
+        [studentId]
+      );
+      const oldAttPaths = oldAttRows
+        .map((r) => r.file_path as string)
+        .filter(Boolean);
+
       await conn.query(
         `UPDATE students SET
           applicant_name = ?,
@@ -159,13 +174,13 @@ export async function PUT(
       const trimmedSupervising = (body.supervising_organization || "").trim();
       if (trimmedCompany) {
         await conn.query(
-          "INSERT IGNORE INTO saved_organizations (org_type, name) VALUES ('company', ?)",
+          "INSERT INTO saved_organizations (org_type, name, is_deleted) VALUES ('company', ?, 0) ON DUPLICATE KEY UPDATE is_deleted = 0",
           [trimmedCompany]
         );
       }
       if (trimmedSupervising) {
         await conn.query(
-          "INSERT IGNORE INTO saved_organizations (org_type, name) VALUES ('supervising', ?)",
+          "INSERT INTO saved_organizations (org_type, name, is_deleted) VALUES ('supervising', ?, 0) ON DUPLICATE KEY UPDATE is_deleted = 0",
           [trimmedSupervising]
         );
       }
@@ -186,12 +201,14 @@ export async function PUT(
       }
 
       // Synchronize attachments if provided
+      const newAttPathSet = new Set<string>();
       if (Array.isArray(body.attachments)) {
         await conn.query("DELETE FROM student_attachments WHERE student_id = ?", [
           studentId,
         ]);
         for (const att of body.attachments) {
           if (!att.file_path || !att.attachment_type) continue;
+          newAttPathSet.add(att.file_path);
           await conn.query(
             `INSERT INTO student_attachments (
               student_id,
@@ -216,6 +233,18 @@ export async function PUT(
       }
 
       await conn.commit();
+
+      // Physical file cleanup on server disk for removed/replaced photo or attachments
+      if (oldPhotoPath && oldPhotoPath !== (body.photo_path || null)) {
+        await deleteStoredFileByUrl(oldPhotoPath);
+      }
+      if (Array.isArray(body.attachments)) {
+        for (const oldPath of oldAttPaths) {
+          if (!newAttPathSet.has(oldPath)) {
+            await deleteStoredFileByUrl(oldPath);
+          }
+        }
+      }
 
       return NextResponse.json({
         success: true,

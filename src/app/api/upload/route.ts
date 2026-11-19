@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import {
+  deleteStoredFileByUrl,
   ensureUploadFolder,
   MAX_FILE_SIZE_BYTES,
   MAX_FILE_SIZE_LABEL,
@@ -116,6 +117,29 @@ export async function POST(req: NextRequest) {
     console.error("File upload error:", error);
     return NextResponse.json(
       { error: "Failed to save file to server storage. Please try again." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const filePath = body.file_path as string | undefined;
+    if (filePath) {
+      await deleteStoredFileByUrl(filePath);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("DELETE /api/upload error:", error);
+    return NextResponse.json(
+      { error: "Failed to remove file from server storage" },
       { status: 500 }
     );
   }

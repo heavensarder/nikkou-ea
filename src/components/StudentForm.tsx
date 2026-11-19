@@ -235,6 +235,46 @@ export default function StudentForm({
     }
   }
 
+  async function removeOrganizationSuggestion(
+    type: "company" | "supervising",
+    name: string
+  ) {
+    if (type === "company") {
+      setSavedCompanies((prev) => prev.filter((c) => c !== name));
+    } else {
+      setSavedSupervisingOrgs((prev) => prev.filter((s) => s !== name));
+    }
+
+    try {
+      await fetch("/api/organizations", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ org_type: type, name }),
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  async function deleteFileFromServer(filePath: string | null | undefined, attachmentId?: number) {
+    if (!filePath) return;
+    try {
+      if (attachmentId) {
+        await fetch(`/api/attachments/${attachmentId}`, {
+          method: "DELETE",
+        });
+      } else {
+        await fetch("/api/upload", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file_path: filePath }),
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // Financial Calculations
   const parsedTotalAmount = Number(totalAmount) || 0;
   const totalPaymentReceived = payments.reduce(
@@ -298,7 +338,11 @@ export default function StudentForm({
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to upload photo");
       }
+      const previousPhoto = photoPath;
       setPhotoPath(data.file.file_path);
+      if (previousPhoto && previousPhoto !== data.file.file_path) {
+        deleteFileFromServer(previousPhoto);
+      }
     } catch (err: unknown) {
       setErrorMessage(
         err instanceof Error ? err.message : "Failed to upload applicant photo"
@@ -373,6 +417,15 @@ export default function StudentForm({
         });
       }
 
+      if (!isMultiple) {
+        const replaced = attachments.filter(
+          (a) => a.attachment_type === attachmentKey
+        );
+        for (const oldAtt of replaced) {
+          deleteFileFromServer(oldAtt.file_path, oldAtt.id);
+        }
+      }
+
       setAttachments((prev) => {
         if (!isMultiple) {
           // Replace existing attachment of this single-document type
@@ -405,7 +458,18 @@ export default function StudentForm({
   }
 
   function handleDeleteAttachment(tempId: string) {
+    const target = attachments.find((att) => att.tempId === tempId);
+    if (target) {
+      deleteFileFromServer(target.file_path, target.id);
+    }
     setAttachments((prev) => prev.filter((att) => att.tempId !== tempId));
+  }
+
+  function handleDeletePhoto() {
+    if (photoPath) {
+      deleteFileFromServer(photoPath);
+    }
+    setPhotoPath(null);
   }
 
   // Payment Installments Handlers
@@ -720,7 +784,7 @@ export default function StudentForm({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPhotoPath(null)}
+                      onClick={handleDeletePhoto}
                       className="inline-flex items-center gap-1 p-1.5 rounded-lg bg-rose-100 text-rose-700 hover:bg-primary hover:text-white text-xs font-semibold transition"
                       title="Delete Photo"
                     >
@@ -809,7 +873,6 @@ export default function StudentForm({
                 <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
                 <input
                   type="text"
-                  list="saved-companies-list"
                   value={companyName}
                   onFocus={() => setShowCompanySuggestions(true)}
                   onBlur={() => {
@@ -826,17 +889,12 @@ export default function StudentForm({
                   autoComplete="off"
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary"
                 />
-                <datalist id="saved-companies-list">
-                  {savedCompanies.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
 
                 {showCompanySuggestions &&
                   savedCompanies.filter((c) =>
                     c.toLowerCase().includes(companyName.trim().toLowerCase())
                   ).length > 0 && (
-                    <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg max-h-48 overflow-y-auto py-1">
+                    <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg max-h-52 overflow-y-auto py-1">
                       <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Saved Implementing Companies
                       </div>
@@ -847,19 +905,35 @@ export default function StudentForm({
                             .includes(companyName.trim().toLowerCase())
                         )
                         .map((c) => (
-                          <button
+                          <div
                             key={c}
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setCompanyName(c);
-                              setShowCompanySuggestions(false);
-                            }}
-                            className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-secondary/10 hover:text-secondary flex items-center gap-2 transition"
+                            className="flex items-center justify-between px-3 py-1.5 hover:bg-secondary/10 transition group"
                           >
-                            <Building2 className="w-3.5 h-3.5 text-secondary shrink-0" />
-                            <span className="truncate">{c}</span>
-                          </button>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setCompanyName(c);
+                                setShowCompanySuggestions(false);
+                              }}
+                              className="flex-1 text-left text-xs font-medium text-slate-700 group-hover:text-secondary flex items-center gap-2 min-w-0 py-0.5"
+                            >
+                              <Building2 className="w-3.5 h-3.5 text-secondary shrink-0" />
+                              <span className="truncate">{c}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                removeOrganizationSuggestion("company", c);
+                              }}
+                              className="p-1 rounded-md text-slate-400 hover:text-primary hover:bg-rose-50 transition shrink-0 ml-2"
+                              title={`Remove "${c}" from suggestions`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         ))}
                     </div>
                   )}
@@ -874,7 +948,6 @@ export default function StudentForm({
                 <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
                 <input
                   type="text"
-                  list="saved-supervising-list"
                   value={supervisingOrg}
                   onFocus={() => setShowSupervisingSuggestions(true)}
                   onBlur={() => {
@@ -894,11 +967,6 @@ export default function StudentForm({
                   autoComplete="off"
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary"
                 />
-                <datalist id="saved-supervising-list">
-                  {savedSupervisingOrgs.map((s) => (
-                    <option key={s} value={s} />
-                  ))}
-                </datalist>
 
                 {showSupervisingSuggestions &&
                   savedSupervisingOrgs.filter((s) =>
@@ -906,7 +974,7 @@ export default function StudentForm({
                       .toLowerCase()
                       .includes(supervisingOrg.trim().toLowerCase())
                   ).length > 0 && (
-                    <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg max-h-48 overflow-y-auto py-1">
+                    <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg max-h-52 overflow-y-auto py-1">
                       <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Saved Supervising Organizations
                       </div>
@@ -917,19 +985,35 @@ export default function StudentForm({
                             .includes(supervisingOrg.trim().toLowerCase())
                         )
                         .map((s) => (
-                          <button
+                          <div
                             key={s}
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setSupervisingOrg(s);
-                              setShowSupervisingSuggestions(false);
-                            }}
-                            className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-secondary/10 hover:text-secondary flex items-center gap-2 transition"
+                            className="flex items-center justify-between px-3 py-1.5 hover:bg-secondary/10 transition group"
                           >
-                            <Building2 className="w-3.5 h-3.5 text-secondary shrink-0" />
-                            <span className="truncate">{s}</span>
-                          </button>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setSupervisingOrg(s);
+                                setShowSupervisingSuggestions(false);
+                              }}
+                              className="flex-1 text-left text-xs font-medium text-slate-700 group-hover:text-secondary flex items-center gap-2 min-w-0 py-0.5"
+                            >
+                              <Building2 className="w-3.5 h-3.5 text-secondary shrink-0" />
+                              <span className="truncate">{s}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                removeOrganizationSuggestion("supervising", s);
+                              }}
+                              className="p-1 rounded-md text-slate-400 hover:text-primary hover:bg-rose-50 transition shrink-0 ml-2"
+                              title={`Remove "${s}" from suggestions`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         ))}
                     </div>
                   )}
