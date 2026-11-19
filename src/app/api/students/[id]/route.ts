@@ -172,29 +172,33 @@ export async function PUT(
       );
 
       // Replace payment installments
-      const trimmedCompany = (body.company_name || "").trim();
-      const trimmedCompanyAddress = (body.company_address || "").trim();
-      const trimmedSupervising = (body.supervising_organization || "").trim();
-      if (trimmedCompany) {
-        if (trimmedCompanyAddress) {
+      try {
+        const trimmedCompany = (body.company_name || "").trim();
+        const trimmedCompanyAddress = (body.company_address || "").trim();
+        const trimmedSupervising = (body.supervising_organization || "").trim();
+        if (trimmedCompany) {
+          if (trimmedCompanyAddress) {
+            await conn.query(
+              `INSERT INTO saved_organizations (org_type, name, address, is_deleted)
+               VALUES ('company', ?, ?, 0)
+               ON DUPLICATE KEY UPDATE address = VALUES(address), is_deleted = 0`,
+              [trimmedCompany, trimmedCompanyAddress]
+            );
+          } else {
+            await conn.query(
+              "INSERT INTO saved_organizations (org_type, name, is_deleted) VALUES ('company', ?, 0) ON DUPLICATE KEY UPDATE is_deleted = 0",
+              [trimmedCompany]
+            );
+          }
+        }
+        if (trimmedSupervising) {
           await conn.query(
-            `INSERT INTO saved_organizations (org_type, name, address, is_deleted)
-             VALUES ('company', ?, ?, 0)
-             ON DUPLICATE KEY UPDATE address = VALUES(address), is_deleted = 0`,
-            [trimmedCompany, trimmedCompanyAddress]
-          );
-        } else {
-          await conn.query(
-            "INSERT INTO saved_organizations (org_type, name, is_deleted) VALUES ('company', ?, 0) ON DUPLICATE KEY UPDATE is_deleted = 0",
-            [trimmedCompany]
+            "INSERT INTO saved_organizations (org_type, name, is_deleted) VALUES ('supervising', ?, 0) ON DUPLICATE KEY UPDATE is_deleted = 0",
+            [trimmedSupervising]
           );
         }
-      }
-      if (trimmedSupervising) {
-        await conn.query(
-          "INSERT INTO saved_organizations (org_type, name, is_deleted) VALUES ('supervising', ?, 0) ON DUPLICATE KEY UPDATE is_deleted = 0",
-          [trimmedSupervising]
-        );
+      } catch (orgErr) {
+        console.warn("Organization auto-save warning:", orgErr);
       }
       await conn.query("DELETE FROM student_payments WHERE student_id = ?", [
         studentId,
@@ -273,8 +277,10 @@ export async function PUT(
     }
   } catch (error) {
     console.error("PUT /api/students/[id] error:", error);
+    const errMsg =
+      error instanceof Error ? error.message : "Failed to update student record";
     return NextResponse.json(
-      { error: "Failed to update student record" },
+      { error: `Failed to update student record: ${errMsg}` },
       { status: 500 }
     );
   }

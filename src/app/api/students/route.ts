@@ -185,33 +185,37 @@ export async function POST(req: NextRequest) {
 
       const studentId = result.insertId;
 
-      const trimmedCompany = (body.company_name || "").trim();
-      const trimmedCompanyAddress = (body.company_address || "").trim();
-      const trimmedSupervising = (body.supervising_organization || "").trim();
-      if (trimmedCompany) {
-        if (trimmedCompanyAddress) {
-          await conn.query(
-            `INSERT INTO saved_organizations (org_type, name, address, is_deleted)
-             VALUES ('company', ?, ?, 0)
-             ON DUPLICATE KEY UPDATE address = VALUES(address), is_deleted = 0`,
-            [trimmedCompany, trimmedCompanyAddress]
-          );
-        } else {
+      try {
+        const trimmedCompany = (body.company_name || "").trim();
+        const trimmedCompanyAddress = (body.company_address || "").trim();
+        const trimmedSupervising = (body.supervising_organization || "").trim();
+        if (trimmedCompany) {
+          if (trimmedCompanyAddress) {
+            await conn.query(
+              `INSERT INTO saved_organizations (org_type, name, address, is_deleted)
+               VALUES ('company', ?, ?, 0)
+               ON DUPLICATE KEY UPDATE address = VALUES(address), is_deleted = 0`,
+              [trimmedCompany, trimmedCompanyAddress]
+            );
+          } else {
+            await conn.query(
+              `INSERT INTO saved_organizations (org_type, name, is_deleted)
+               VALUES ('company', ?, 0)
+               ON DUPLICATE KEY UPDATE is_deleted = 0`,
+              [trimmedCompany]
+            );
+          }
+        }
+        if (trimmedSupervising) {
           await conn.query(
             `INSERT INTO saved_organizations (org_type, name, is_deleted)
-             VALUES ('company', ?, 0)
+             VALUES ('supervising', ?, 0)
              ON DUPLICATE KEY UPDATE is_deleted = 0`,
-            [trimmedCompany]
+            [trimmedSupervising]
           );
         }
-      }
-      if (trimmedSupervising) {
-        await conn.query(
-          `INSERT INTO saved_organizations (org_type, name, is_deleted)
-           VALUES ('supervising', ?, 0)
-           ON DUPLICATE KEY UPDATE is_deleted = 0`,
-          [trimmedSupervising]
-        );
+      } catch (orgErr) {
+        console.warn("Organization auto-save warning:", orgErr);
       }
 
       for (const payment of validPayments) {
@@ -277,8 +281,10 @@ export async function POST(req: NextRequest) {
     }
   } catch (error) {
     console.error("POST /api/students error:", error);
+    const errMsg =
+      error instanceof Error ? error.message : "Failed to create student record";
     return NextResponse.json(
-      { error: "Failed to create student record" },
+      { error: `Failed to create student record: ${errMsg}` },
       { status: 500 }
     );
   }

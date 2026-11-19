@@ -8,11 +8,13 @@ const DB_CONFIG = {
   database: process.env.DB_NAME || "nikkou-ea",
 };
 
+const CURRENT_SCHEMA_VERSION = 4;
+
 declare global {
   // eslint-disable-next-line no-var
   var _mysqlPool: mysql.Pool | undefined;
   // eslint-disable-next-line no-var
-  var _dbInitialized: boolean | undefined;
+  var _dbSchemaVersion: number | undefined;
 }
 
 export function getPool(): mysql.Pool {
@@ -33,7 +35,7 @@ export function getPool(): mysql.Pool {
 }
 
 export async function ensureDatabaseInitialized(): Promise<void> {
-  if (global._dbInitialized) return;
+  if (global._dbSchemaVersion === CURRENT_SCHEMA_VERSION) return;
 
   try {
     // First ensure database exists
@@ -82,6 +84,15 @@ export async function ensureDatabaseInitialized(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
+  // Ensure company_address column exists on existing students table
+  try {
+    await pool.query(
+      "ALTER TABLE students ADD COLUMN company_address VARCHAR(500) NOT NULL DEFAULT '' AFTER company_name"
+    );
+  } catch {
+    // Column already exists
+  }
+
   // Create student_payments table (multiple payment installments with date)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS student_payments (
@@ -126,14 +137,6 @@ export async function ensureDatabaseInitialized(): Promise<void> {
 
   try {
     await pool.query(
-      "ALTER TABLE students ADD COLUMN company_address VARCHAR(500) NOT NULL DEFAULT '' AFTER company_name"
-    );
-  } catch {
-    // Column already exists
-  }
-
-  try {
-    await pool.query(
       "ALTER TABLE saved_organizations ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0"
     );
   } catch {
@@ -148,5 +151,5 @@ export async function ensureDatabaseInitialized(): Promise<void> {
     // Column already exists
   }
 
-  global._dbInitialized = true;
+  global._dbSchemaVersion = CURRENT_SCHEMA_VERSION;
 }
