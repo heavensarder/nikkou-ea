@@ -8,25 +8,11 @@ export const MAX_FILE_SIZE_LABEL = "5 MB";
 export type UploadFolder = "photos" | "attachments";
 
 /**
- * Resolves the base upload storage directory on the server.
- * On an Ubuntu VPS, you can optionally set UPLOAD_STORAGE_DIR=/var/nikkou-ea/uploads
- * or leave it unset to use <project_root>/storage/uploads automatically.
+ * Always resolves to <project_root>/storage/uploads on both local PC and Ubuntu VPS.
  */
 export function getStorageRoot(): string {
-  const customDir = process.env.UPLOAD_STORAGE_DIR?.trim();
-  if (customDir) {
-    // If a Linux path like /srv/... or /var/... is configured while testing on Windows,
-    // use local ./storage/uploads on Windows and the exact Linux path on Ubuntu VPS.
-    if (
-      process.platform === "win32" &&
-      (customDir.startsWith("/srv/") ||
-        customDir.startsWith("/var/") ||
-        customDir.startsWith("/home/") ||
-        customDir.startsWith("/opt/"))
-    ) {
-      return path.resolve(process.cwd(), "storage", "uploads");
-    }
-    return path.resolve(customDir);
+  if (process.env.UPLOAD_STORAGE_DIR && process.env.UPLOAD_STORAGE_DIR.trim()) {
+    return path.resolve(process.env.UPLOAD_STORAGE_DIR.trim());
   }
   return path.resolve(process.cwd(), "storage", "uploads");
 }
@@ -46,7 +32,7 @@ export async function ensureUploadFolder(folder: UploadFolder): Promise<string> 
 
 /**
  * Resolves an existing file from either the primary server storage directory
- * or the legacy public/uploads directory.
+ * (<project_root>/storage/uploads) or the legacy public/uploads directory.
  */
 export function resolveStoredFilePath(
   folder: UploadFolder,

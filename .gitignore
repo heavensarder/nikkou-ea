@@ -16,8 +16,7 @@
 .env.test.local
 .env.production.local
 
-# Uploaded student photos & documents (persisted on server storage)
-/storage/uploads/
+# Legacy uploads folder
 /public/uploads/
 
 # Debug & logs
