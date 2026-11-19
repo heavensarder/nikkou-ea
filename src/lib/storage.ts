@@ -13,8 +13,20 @@ export type UploadFolder = "photos" | "attachments";
  * or leave it unset to use <project_root>/storage/uploads automatically.
  */
 export function getStorageRoot(): string {
-  if (process.env.UPLOAD_STORAGE_DIR && process.env.UPLOAD_STORAGE_DIR.trim()) {
-    return path.resolve(process.env.UPLOAD_STORAGE_DIR.trim());
+  const customDir = process.env.UPLOAD_STORAGE_DIR?.trim();
+  if (customDir) {
+    // If a Linux path like /srv/... or /var/... is configured while testing on Windows,
+    // use local ./storage/uploads on Windows and the exact Linux path on Ubuntu VPS.
+    if (
+      process.platform === "win32" &&
+      (customDir.startsWith("/srv/") ||
+        customDir.startsWith("/var/") ||
+        customDir.startsWith("/home/") ||
+        customDir.startsWith("/opt/"))
+    ) {
+      return path.resolve(process.cwd(), "storage", "uploads");
+    }
+    return path.resolve(customDir);
   }
   return path.resolve(process.cwd(), "storage", "uploads");
 }
