@@ -116,10 +116,19 @@ export async function ensureDatabaseInitialized(): Promise<void> {
       id INT AUTO_INCREMENT PRIMARY KEY,
       org_type ENUM('company', 'supervising') NOT NULL,
       name VARCHAR(255) NOT NULL,
+      is_deleted TINYINT(1) NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE KEY uniq_org_type_name (org_type, name)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
+
+  try {
+    await pool.query(
+      "ALTER TABLE saved_organizations ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0"
+    );
+  } catch {
+    // Column already exists
+  }
 
   global._dbInitialized = true;
 }
