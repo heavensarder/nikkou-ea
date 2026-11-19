@@ -744,8 +744,8 @@ export default function StudentForm({
       </div>
 
       {/* SECTION 1: Applicant Photo & Personal Profile */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="px-4 sm:px-6 py-3.5 bg-secondary/5 border-b border-slate-200 flex items-center gap-2">
+      <div className="relative z-20 bg-white rounded-2xl border border-slate-200 shadow-xs">
+        <div className="px-4 sm:px-6 py-3.5 bg-secondary/5 border-b border-slate-200 rounded-t-2xl flex items-center gap-2">
           <User className="w-4 h-4 sm:w-5 sm:h-5 text-secondary" />
           <h3 className="text-sm sm:text-base font-bold text-secondary">
             Applicant Profile &amp; Photo
@@ -960,7 +960,7 @@ export default function StudentForm({
                   savedCompanies.filter((c) =>
                     c.toLowerCase().includes(companyName.trim().toLowerCase())
                   ).length > 0 && (
-                    <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg max-h-52 overflow-y-auto py-1">
+                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl max-h-52 overflow-y-auto py-1">
                       <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Saved Implementing Companies
                       </div>
@@ -1075,7 +1075,7 @@ export default function StudentForm({
                       .toLowerCase()
                       .includes(supervisingOrg.trim().toLowerCase())
                   ).length > 0 && (
-                    <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg max-h-52 overflow-y-auto py-1">
+                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl max-h-52 overflow-y-auto py-1">
                       <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Saved Supervising Organizations
                       </div>
