@@ -65,6 +65,7 @@ export async function ensureDatabaseInitialized(): Promise<void> {
       job_sub_category VARCHAR(100) NULL,
       gender VARCHAR(30) NOT NULL DEFAULT 'Male',
       company_name VARCHAR(255) NOT NULL DEFAULT '',
+      company_address VARCHAR(500) NOT NULL DEFAULT '',
       supervising_organization VARCHAR(255) NOT NULL DEFAULT '',
       total_amount DECIMAL(14, 2) NOT NULL DEFAULT 0.00,
       payment_received DECIMAL(14, 2) NOT NULL DEFAULT 0.00,
@@ -116,6 +117,7 @@ export async function ensureDatabaseInitialized(): Promise<void> {
       id INT AUTO_INCREMENT PRIMARY KEY,
       org_type ENUM('company', 'supervising') NOT NULL,
       name VARCHAR(255) NOT NULL,
+      address VARCHAR(500) NOT NULL DEFAULT '',
       is_deleted TINYINT(1) NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE KEY uniq_org_type_name (org_type, name)
@@ -124,7 +126,23 @@ export async function ensureDatabaseInitialized(): Promise<void> {
 
   try {
     await pool.query(
+      "ALTER TABLE students ADD COLUMN company_address VARCHAR(500) NOT NULL DEFAULT '' AFTER company_name"
+    );
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    await pool.query(
       "ALTER TABLE saved_organizations ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0"
+    );
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    await pool.query(
+      "ALTER TABLE saved_organizations ADD COLUMN address VARCHAR(500) NOT NULL DEFAULT '' AFTER name"
     );
   } catch {
     // Column already exists

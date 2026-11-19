@@ -204,6 +204,7 @@ export interface StudentRecord {
   job_sub_category: string | null;
   gender: string;
   company_name: string;
+  company_address?: string;
   supervising_organization: string;
   total_amount: number;
   payment_received: number;

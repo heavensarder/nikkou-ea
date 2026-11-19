@@ -36,6 +36,7 @@ import {
   Loader2,
   Calendar,
   Wallet,
+  MapPin,
 } from "lucide-react";
 
 export interface FormAttachmentItem {
@@ -86,12 +87,18 @@ export default function StudentForm({
   const [companyName, setCompanyName] = useState<string>(
     initialData?.company_name || ""
   );
+  const [companyAddress, setCompanyAddress] = useState<string>(
+    initialData?.company_address || ""
+  );
   const [supervisingOrg, setSupervisingOrg] = useState<string>(
     initialData?.supervising_organization || ""
   );
 
   // Auto-saved organization suggestions
   const [savedCompanies, setSavedCompanies] = useState<string[]>([]);
+  const [savedCompanyAddresses, setSavedCompanyAddresses] = useState<
+    Record<string, string>
+  >({});
   const [savedSupervisingOrgs, setSavedSupervisingOrgs] = useState<string[]>(
     []
   );
@@ -190,6 +197,12 @@ export default function StudentForm({
           if (Array.isArray(data.companies)) {
             setSavedCompanies(data.companies);
           }
+          if (
+            data.companyAddresses &&
+            typeof data.companyAddresses === "object"
+          ) {
+            setSavedCompanyAddresses(data.companyAddresses);
+          }
           if (Array.isArray(data.supervisingOrganizations)) {
             setSavedSupervisingOrgs(data.supervisingOrganizations);
           }
@@ -203,20 +216,31 @@ export default function StudentForm({
 
   async function autoSaveOrganization(
     type: "company" | "supervising",
-    value: string
+    value: string,
+    addressValue?: string
   ) {
     const trimmed = value.trim();
     if (!trimmed) return;
 
     if (type === "company") {
+      const trimmedAddr = (addressValue ?? companyAddress).trim();
       setSavedCompanies((prev) =>
         prev.includes(trimmed) ? prev : [...prev, trimmed].sort()
       );
+      if (trimmedAddr) {
+        setSavedCompanyAddresses((prev) => ({
+          ...prev,
+          [trimmed]: trimmedAddr,
+        }));
+      }
       try {
         await fetch("/api/organizations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ company_name: trimmed }),
+          body: JSON.stringify({
+            company_name: trimmed,
+            company_address: trimmedAddr,
+          }),
         });
       } catch {
         // ignore
@@ -561,6 +585,7 @@ export default function StudentForm({
         job_sub_category: hasSub ? jobSubCategory : null,
         gender,
         company_name: companyName.trim(),
+        company_address: companyAddress.trim(),
         supervising_organization: supervisingOrg.trim(),
         total_amount: parsedTotalAmount,
         payments: payments.map((p) => ({
@@ -907,13 +932,24 @@ export default function StudentForm({
                   onFocus={() => setShowCompanySuggestions(true)}
                   onBlur={() => {
                     setTimeout(() => setShowCompanySuggestions(false), 180);
-                    if (companyName.trim()) {
-                      autoSaveOrganization("company", companyName);
+                    const trimmed = companyName.trim();
+                    if (trimmed) {
+                      const rememberedAddr = savedCompanyAddresses[trimmed];
+                      if (rememberedAddr && !companyAddress.trim()) {
+                        setCompanyAddress(rememberedAddr);
+                        autoSaveOrganization("company", trimmed, rememberedAddr);
+                      } else {
+                        autoSaveOrganization("company", trimmed);
+                      }
                     }
                   }}
                   onChange={(e) => {
-                    setCompanyName(e.target.value);
+                    const val = e.target.value;
+                    setCompanyName(val);
                     setShowCompanySuggestions(true);
+                    if (savedCompanyAddresses[val.trim()]) {
+                      setCompanyAddress(savedCompanyAddresses[val.trim()]);
+                    }
                   }}
                   placeholder="Enter or select Japanese host company name"
                   autoComplete="off"
@@ -944,12 +980,22 @@ export default function StudentForm({
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 setCompanyName(c);
+                                if (savedCompanyAddresses[c]) {
+                                  setCompanyAddress(savedCompanyAddresses[c]);
+                                }
                                 setShowCompanySuggestions(false);
                               }}
-                              className="flex-1 text-left text-xs font-medium text-slate-700 group-hover:text-secondary flex items-center gap-2 min-w-0 py-0.5"
+                              className="flex-1 text-left text-xs font-medium text-slate-700 group-hover:text-secondary flex items-start gap-2 min-w-0 py-0.5"
                             >
-                              <Building2 className="w-3.5 h-3.5 text-secondary shrink-0" />
-                              <span className="truncate">{c}</span>
+                              <Building2 className="w-3.5 h-3.5 text-secondary shrink-0 mt-0.5" />
+                              <div className="min-w-0">
+                                <div className="truncate font-semibold">{c}</div>
+                                {savedCompanyAddresses[c] && (
+                                  <div className="text-[10.5px] text-slate-400 truncate">
+                                    {savedCompanyAddresses[c]}
+                                  </div>
+                                )}
+                              </div>
                             </button>
                             <button
                               type="button"
@@ -970,7 +1016,32 @@ export default function StudentForm({
               </div>
             </div>
 
-            <div className="relative">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                Company Address
+              </label>
+              <div className="relative">
+                <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
+                <input
+                  type="text"
+                  value={companyAddress}
+                  onChange={(e) => setCompanyAddress(e.target.value)}
+                  onBlur={() => {
+                    if (companyName.trim() && companyAddress.trim()) {
+                      autoSaveOrganization(
+                        "company",
+                        companyName,
+                        companyAddress
+                      );
+                    }
+                  }}
+                  placeholder="Auto-fills for saved company or enter company address"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary"
+                />
+              </div>
+            </div>
+
+            <div className="relative sm:col-span-2">
               <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                 Supervising Organization
               </label>

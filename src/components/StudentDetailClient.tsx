@@ -393,6 +393,12 @@ export default function StudentDetailClient({
                   </span>
                 </div>
                 <div className="py-2.5 flex justify-between gap-4">
+                  <span className="text-slate-500">Company Address</span>
+                  <span className="font-semibold text-slate-900 text-right">
+                    {student.company_address || "—"}
+                  </span>
+                </div>
+                <div className="py-2.5 flex justify-between gap-4">
                   <span className="text-slate-500">
                     Supervising Organization
                   </span>

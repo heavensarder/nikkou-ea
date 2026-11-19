@@ -147,6 +147,7 @@ export async function POST(req: NextRequest) {
           job_sub_category,
           gender,
           company_name,
+          company_address,
           supervising_organization,
           total_amount,
           payment_received,
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest) {
           facebook,
           status,
           is_draft
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           applicantName || "Untitled Draft Student",
           body.photo_path || null,
@@ -167,6 +168,7 @@ export async function POST(req: NextRequest) {
           body.job_sub_category || null,
           body.gender || "Male",
           (body.company_name || "").trim(),
+          (body.company_address || "").trim(),
           (body.supervising_organization || "").trim(),
           totalAmount,
           totalReceived,
@@ -184,16 +186,30 @@ export async function POST(req: NextRequest) {
       const studentId = result.insertId;
 
       const trimmedCompany = (body.company_name || "").trim();
+      const trimmedCompanyAddress = (body.company_address || "").trim();
       const trimmedSupervising = (body.supervising_organization || "").trim();
       if (trimmedCompany) {
-        await conn.query(
-          "INSERT IGNORE INTO saved_organizations (org_type, name) VALUES ('company', ?)",
-          [trimmedCompany]
-        );
+        if (trimmedCompanyAddress) {
+          await conn.query(
+            `INSERT INTO saved_organizations (org_type, name, address, is_deleted)
+             VALUES ('company', ?, ?, 0)
+             ON DUPLICATE KEY UPDATE address = VALUES(address), is_deleted = 0`,
+            [trimmedCompany, trimmedCompanyAddress]
+          );
+        } else {
+          await conn.query(
+            `INSERT INTO saved_organizations (org_type, name, is_deleted)
+             VALUES ('company', ?, 0)
+             ON DUPLICATE KEY UPDATE is_deleted = 0`,
+            [trimmedCompany]
+          );
+        }
       }
       if (trimmedSupervising) {
         await conn.query(
-          "INSERT IGNORE INTO saved_organizations (org_type, name) VALUES ('supervising', ?)",
+          `INSERT INTO saved_organizations (org_type, name, is_deleted)
+           VALUES ('supervising', ?, 0)
+           ON DUPLICATE KEY UPDATE is_deleted = 0`,
           [trimmedSupervising]
         );
       }
