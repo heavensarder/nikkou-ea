@@ -16,8 +16,11 @@
 .env.test.local
 .env.production.local
 
-# Legacy uploads folder
-/public/uploads/
+# Keep public/uploads folders in Git, ignore uploaded files inside them
+/public/uploads/photos/*
+!/public/uploads/photos/.gitkeep
+/public/uploads/attachments/*
+!/public/uploads/attachments/.gitkeep
 
 # Debug & logs
 npm-debug.log*
