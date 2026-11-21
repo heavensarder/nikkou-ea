@@ -126,5 +126,7 @@ export function generateMultiPagePdfBlob(pages: ScannedPdfPage[]): Blob {
     } /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`
   );
 
-  return new Blob(chunks, { type: "application/pdf" });
+  return new Blob(chunks as unknown as BlobPart[], {
+    type: "application/pdf",
+  });
 }
