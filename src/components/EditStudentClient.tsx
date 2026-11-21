@@ -61,20 +61,7 @@ export default function EditStudentClient({
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
-          {/* Breadcrumb Back Link */}
-          <div className="flex items-center justify-between">
-            <Link
-              href={`/students/${student.id}`}
-              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-500 hover:text-secondary transition group"
-            >
-              <ArrowLeft className="w-4 h-4 text-slate-400 group-hover:text-secondary group-hover:-translate-x-0.5 transition-transform" />
-              <span>Back to Student Details ({student.applicant_name})</span>
-            </Link>
-          </div>
-
-          <StudentForm initialData={student} isEditMode={true} />
-        </div>
+        <StudentForm initialData={student} isEditMode={true} />
       )}
     </AppShell>
   );
