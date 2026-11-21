@@ -17,6 +17,7 @@ import {
   GraduationCap,
   PanelLeftClose,
   PanelLeftOpen,
+  ArrowLeft,
 } from "lucide-react";
 
 interface AppShellProps {
@@ -24,6 +25,9 @@ interface AppShellProps {
   title?: string;
   subtitle?: string;
   actions?: React.ReactNode;
+  backUrl?: string;
+  backLabel?: string;
+  onBack?: () => void;
 }
 
 export default function AppShell({
@@ -31,6 +35,9 @@ export default function AppShell({
   title,
   subtitle,
   actions,
+  backUrl,
+  backLabel,
+  onBack,
 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -45,6 +52,23 @@ export default function AppShell({
     pathname === "/students" ||
     (pathname?.startsWith("/students/") && pathname !== "/students/create");
   const isCreateStudent = pathname === "/students/create";
+
+  const handleBack = (e: React.MouseEvent) => {
+    if (onBack) {
+      e.preventDefault();
+      onBack();
+      return;
+    }
+    if (backUrl) {
+      if (e.ctrlKey || e.metaKey || e.button === 1) return;
+      e.preventDefault();
+      if (typeof window !== "undefined" && window.history.length > 1) {
+        router.back();
+      } else {
+        router.push(backUrl);
+      }
+    }
+  };
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -316,37 +340,57 @@ export default function AppShell({
             </Link>
           </div>
 
-          <div className="flex items-center justify-center lg:justify-start gap-2.5 min-w-0">
-            {/* Desktop / 12-inch Laptop Sidebar Collapse Toggle */}
-            <button
-              type="button"
-              onClick={() => setSidebarCollapsed((prev) => !prev)}
-              className="hidden lg:inline-flex p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-secondary hover:bg-slate-100 transition shrink-0"
-              title={
-                sidebarCollapsed
-                  ? "Expand sidebar"
-                  : "Collapse sidebar for more screen space"
-              }
-            >
-              {sidebarCollapsed ? (
-                <PanelLeftOpen className="w-4 h-4" />
-              ) : (
-                <PanelLeftClose className="w-4 h-4" />
-              )}
-            </button>
+          <div className="flex items-center justify-between gap-2.5 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              {/* Desktop / 12-inch Laptop Sidebar Collapse Toggle */}
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed((prev) => !prev)}
+                className="hidden lg:inline-flex p-1.5 rounded-xl border border-slate-200 text-slate-500 hover:text-secondary hover:bg-slate-100 transition shrink-0"
+                title={
+                  sidebarCollapsed
+                    ? "Expand sidebar"
+                    : "Collapse sidebar for more screen space"
+                }
+              >
+                {sidebarCollapsed ? (
+                  <PanelLeftOpen className="w-4 h-4" />
+                ) : (
+                  <PanelLeftClose className="w-4 h-4" />
+                )}
+              </button>
 
-            <div className="min-w-0 text-center lg:text-left">
-              {title && (
-                <h2 className="text-sm sm:text-lg font-bold text-secondary tracking-tight truncate">
-                  {title}
-                </h2>
+              {/* Responsive Back Button (Desktop and Mobile) */}
+              {(backUrl || onBack) && (
+                <Link
+                  href={backUrl || "#"}
+                  onClick={handleBack}
+                  className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 hover:border-slate-300 text-slate-700 hover:text-secondary text-xs sm:text-sm font-semibold transition shadow-2xs group shrink-0 active:scale-95"
+                  title={backLabel ? `Back to ${backLabel}` : "Go back"}
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 group-hover:text-secondary group-hover:-translate-x-0.5 transition-transform shrink-0" />
+                  <span className="hidden sm:inline">
+                    {backLabel ? `Back to ${backLabel}` : "Back"}
+                  </span>
+                  <span className="sm:hidden">Back</span>
+                </Link>
               )}
-              {subtitle && (
-                <p className="text-[11px] sm:text-xs text-slate-500 truncate hidden sm:block">
-                  {subtitle}
-                </p>
-              )}
+
+              <div className="min-w-0 text-left">
+                {title && (
+                  <h2 className="text-sm sm:text-lg font-bold text-secondary tracking-tight truncate">
+                    {title}
+                  </h2>
+                )}
+                {subtitle && (
+                  <p className="text-[11px] sm:text-xs text-slate-500 truncate hidden sm:block">
+                    {subtitle}
+                  </p>
+                )}
+              </div>
             </div>
+
+            {actions && <div className="shrink-0">{actions}</div>}
           </div>
         </header>
 

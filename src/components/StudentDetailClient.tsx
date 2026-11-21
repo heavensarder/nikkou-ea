@@ -176,6 +176,8 @@ export default function StudentDetailClient({
           : "Student Record Details"
       }
       subtitle="Complete placement dossier, payment installments, and verification attachments"
+      backUrl="/students"
+      backLabel="Student List"
     >
       {loading ? (
         <div className="py-24 flex flex-col items-center justify-center text-secondary">
@@ -199,7 +201,22 @@ export default function StudentDetailClient({
           </Link>
         </div>
       ) : (
-        <div className="space-y-8 pb-16">
+        <div className="space-y-6 pb-16">
+          {/* Breadcrumb Back Link */}
+          <div className="flex items-center justify-between gap-3">
+            <Link
+              href="/students"
+              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-500 hover:text-secondary transition group"
+            >
+              <ArrowLeft className="w-4 h-4 text-slate-400 group-hover:text-secondary group-hover:-translate-x-0.5 transition-transform" />
+              <span>Back to Student List</span>
+            </Link>
+
+            <span className="text-xs font-medium text-slate-400">
+              Student #{student.id}
+            </span>
+          </div>
+
           {/* Profile Header Banner */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs p-6">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">

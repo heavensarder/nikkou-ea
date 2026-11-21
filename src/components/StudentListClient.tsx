@@ -115,6 +115,8 @@ export default function StudentListClient() {
     <AppShell
       title="Student List"
       subtitle="Manage Nikkou Centre students placed in Japan, drafts, payment balances, and attachments"
+      backUrl="/dashboard"
+      backLabel="Dashboard"
     >
       <div className="space-y-4">
         {/* Filter & Search Bar */}

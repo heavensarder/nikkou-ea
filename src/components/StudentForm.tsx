@@ -886,12 +886,28 @@ export default function StudentForm({
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                router.back();
+              } else if (isEditMode && initialData?.id) {
+                router.push(`/students/${initialData.id}`);
+              } else {
+                router.push("/students");
+              }
+            }}
+            className="whitespace-nowrap px-3 sm:px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs sm:text-sm font-semibold transition active:scale-95"
+          >
+            Cancel
+          </button>
+
           <button
             type="button"
             disabled={submitting !== null}
             onClick={() => handleSubmit(true)}
-            className="whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl border-2 border-secondary text-secondary hover:bg-secondary hover:text-white text-xs sm:text-sm font-semibold transition disabled:opacity-50"
+            className="flex-1 sm:flex-initial whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl border-2 border-secondary text-secondary hover:bg-secondary hover:text-white text-xs sm:text-sm font-semibold transition disabled:opacity-50"
           >
             {submitting === "draft" ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
@@ -905,7 +921,7 @@ export default function StudentForm({
             type="button"
             disabled={submitting !== null}
             onClick={() => handleSubmit(false)}
-            className="whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs sm:text-sm font-semibold shadow-md shadow-primary/25 transition disabled:opacity-50"
+            className="flex-1 sm:flex-initial whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs sm:text-sm font-semibold shadow-md shadow-primary/25 transition disabled:opacity-50"
           >
             {submitting === "publish" ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
