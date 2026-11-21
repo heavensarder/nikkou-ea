@@ -316,7 +316,7 @@ export default function AppShell({
             </Link>
           </div>
 
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center justify-center lg:justify-start gap-2.5 min-w-0">
             {/* Desktop / 12-inch Laptop Sidebar Collapse Toggle */}
             <button
               type="button"
@@ -335,7 +335,7 @@ export default function AppShell({
               )}
             </button>
 
-            <div className="min-w-0">
+            <div className="min-w-0 text-center lg:text-left">
               {title && (
                 <h2 className="text-sm sm:text-lg font-bold text-secondary tracking-tight truncate">
                   {title}

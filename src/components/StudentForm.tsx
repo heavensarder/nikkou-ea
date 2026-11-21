@@ -15,6 +15,7 @@ import {
 } from "@/lib/constants";
 import AttachmentPreviewModal from "./AttachmentPreviewModal";
 import ConfirmModal from "./ConfirmModal";
+import DocumentScannerModal from "./DocumentScannerModal";
 import {
   Upload,
   Trash2,
@@ -38,6 +39,7 @@ import {
   Calendar,
   Wallet,
   MapPin,
+  Camera,
 } from "lucide-react";
 
 export interface FormAttachmentItem {
@@ -196,6 +198,16 @@ export default function StudentForm({
 
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const cameraInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // Mobile Camera Scanner Modal state
+  const [scannerSession, setScannerSession] = useState<{
+    attachmentKey: string;
+    label: string;
+    multiple: boolean;
+    requiresTitle: boolean;
+    file: File;
+  } | null>(null);
 
   // Load saved Company Names and Supervising Organizations
   useEffect(() => {
@@ -1830,6 +1842,42 @@ export default function StudentForm({
                       )}
                     </div>
 
+                    {/* Mobile-Only Camera Capture & Auto-Scan Button */}
+                    <div className="mt-2 md:hidden">
+                      <input
+                        ref={(el) => {
+                          cameraInputRefs.current[config.key] = el;
+                        }}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            setScannerSession({
+                              attachmentKey: config.key,
+                              label: config.label,
+                              multiple: config.multiple,
+                              requiresTitle: config.requiresTitle,
+                              file: e.target.files[0],
+                            });
+                            e.target.value = "";
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={isUploading}
+                        onClick={() =>
+                          cameraInputRefs.current[config.key]?.click()
+                        }
+                        className="w-full inline-flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-secondary text-white hover:bg-secondary-hover text-xs font-bold shadow-2xs transition disabled:opacity-50"
+                      >
+                        <Camera className="w-4 h-4 shrink-0" />
+                        <span>Capture &amp; Scan with Camera</span>
+                      </button>
+                    </div>
+
                     {/* Uploaded File Card */}
                     {hasUploaded && (
                       <div className="mt-2.5 space-y-2">
@@ -2081,6 +2129,42 @@ export default function StudentForm({
                       )}
                     </div>
 
+                    {/* Mobile-Only Camera Capture & Auto-Scan Button */}
+                    <div className="mt-2.5 md:hidden">
+                      <input
+                        ref={(el) => {
+                          cameraInputRefs.current[config.key] = el;
+                        }}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            setScannerSession({
+                              attachmentKey: config.key,
+                              label: config.label,
+                              multiple: config.multiple,
+                              requiresTitle: config.requiresTitle,
+                              file: e.target.files[0],
+                            });
+                            e.target.value = "";
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={isUploading}
+                        onClick={() =>
+                          cameraInputRefs.current[config.key]?.click()
+                        }
+                        className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-secondary text-white hover:bg-secondary-hover text-xs font-bold shadow-2xs transition disabled:opacity-50"
+                      >
+                        <Camera className="w-4 h-4 shrink-0" />
+                        <span>Capture &amp; Scan with Camera</span>
+                      </button>
+                    </div>
+
                     {/* Uploaded Files List */}
                     {hasUploaded && (
                       <div className="mt-3 space-y-2">
@@ -2249,6 +2333,23 @@ export default function StudentForm({
         }
         itemName={confirmDialog?.itemName}
         confirmText={confirmDialog?.confirmText || "Yes, Delete"}
+      />
+
+      {/* Mobile Camera Document Scanner Modal */}
+      <DocumentScannerModal
+        isOpen={Boolean(scannerSession)}
+        imageFile={scannerSession?.file || null}
+        documentLabel={scannerSession?.label || "Document"}
+        onClose={() => setScannerSession(null)}
+        onSaveScan={async (scannedFile) => {
+          if (!scannerSession) return;
+          await handleAttachmentFiles(
+            scannerSession.attachmentKey,
+            [scannedFile],
+            scannerSession.multiple,
+            scannerSession.requiresTitle
+          );
+        }}
       />
     </div>
   );
