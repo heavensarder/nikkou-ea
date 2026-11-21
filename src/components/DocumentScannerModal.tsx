@@ -191,6 +191,134 @@ function renderPageToCanvas(
   ctx.putImageData(imageData, 0, 0);
 }
 
+/**
+ * Automatically detects the document/paper boundaries inside a camera photo
+ * by comparing center paper brightness against outer edges, falling back to a 5% inset frame.
+ */
+function detectAutoDocumentCrop(img: HTMLImageElement): {
+  cropTop: number;
+  cropBottom: number;
+  cropLeft: number;
+  cropRight: number;
+} {
+  try {
+    const W = 120;
+    const H = 120;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return { cropTop: 5, cropBottom: 5, cropLeft: 5, cropRight: 5 };
+    }
+
+    ctx.drawImage(img, 0, 0, W, H);
+    const data = ctx.getImageData(0, 0, W, H).data;
+
+    const getLum = (x: number, y: number) => {
+      const idx = (y * W + x) * 4;
+      return 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+    };
+
+    // Sample center paper brightness (inner 30%..70%)
+    let centerSum = 0;
+    let centerCount = 0;
+    for (let y = Math.floor(H * 0.3); y < Math.floor(H * 0.7); y += 2) {
+      for (let x = Math.floor(W * 0.3); x < Math.floor(W * 0.7); x += 2) {
+        centerSum += getLum(x, y);
+        centerCount++;
+      }
+    }
+    const centerLum = centerCount > 0 ? centerSum / centerCount : 180;
+
+    // Sample outer border brightness
+    let borderSum = 0;
+    let borderCount = 0;
+    for (let x = 0; x < W; x += 2) {
+      borderSum += getLum(x, 1) + getLum(x, H - 2);
+      borderCount += 2;
+    }
+    for (let y = 0; y < H; y += 2) {
+      borderSum += getLum(1, y) + getLum(W - 2, y);
+      borderCount += 2;
+    }
+    const borderLum = borderCount > 0 ? borderSum / borderCount : centerLum;
+
+    // If outer background is noticeably darker than the paper in the center, detect the 4 edges
+    if (centerLum - borderLum > 18) {
+      const threshold = borderLum + (centerLum - borderLum) * 0.48;
+      const maxInset = Math.floor(W * 0.32);
+
+      let topRow = 4;
+      for (let y = 2; y < maxInset; y++) {
+        let sum = 0;
+        let cnt = 0;
+        for (let x = Math.floor(W * 0.25); x < Math.floor(W * 0.75); x += 2) {
+          sum += getLum(x, y);
+          cnt++;
+        }
+        if (sum / cnt >= threshold) {
+          topRow = Math.max(2, y - 1);
+          break;
+        }
+      }
+
+      let bottomRow = 4;
+      for (let y = 2; y < maxInset; y++) {
+        let sum = 0;
+        let cnt = 0;
+        for (let x = Math.floor(W * 0.25); x < Math.floor(W * 0.75); x += 2) {
+          sum += getLum(x, H - 1 - y);
+          cnt++;
+        }
+        if (sum / cnt >= threshold) {
+          bottomRow = Math.max(2, y - 1);
+          break;
+        }
+      }
+
+      let leftCol = 4;
+      for (let x = 2; x < maxInset; x++) {
+        let sum = 0;
+        let cnt = 0;
+        for (let y = Math.floor(H * 0.25); y < Math.floor(H * 0.75); y += 2) {
+          sum += getLum(x, y);
+          cnt++;
+        }
+        if (sum / cnt >= threshold) {
+          leftCol = Math.max(2, x - 1);
+          break;
+        }
+      }
+
+      let rightCol = 4;
+      for (let x = 2; x < maxInset; x++) {
+        let sum = 0;
+        let cnt = 0;
+        for (let y = Math.floor(H * 0.25); y < Math.floor(H * 0.75); y += 2) {
+          sum += getLum(W - 1 - x, y);
+          cnt++;
+        }
+        if (sum / cnt >= threshold) {
+          rightCol = Math.max(2, x - 1);
+          break;
+        }
+      }
+
+      return {
+        cropTop: Math.round((topRow / H) * 1000) / 10,
+        cropBottom: Math.round((bottomRow / H) * 1000) / 10,
+        cropLeft: Math.round((leftCol / W) * 1000) / 10,
+        cropRight: Math.round((rightCol / W) * 1000) / 10,
+      };
+    }
+  } catch {
+    // Fallback to default inset
+  }
+
+  return { cropTop: 5, cropBottom: 5, cropLeft: 5, cropRight: 5 };
+}
+
 export default function DocumentScannerModal({
   isOpen,
   imageFile,
@@ -228,6 +356,8 @@ export default function DocumentScannerModal({
     });
     URL.revokeObjectURL(objectUrl);
 
+    const autoBounds = detectAutoDocumentCrop(img);
+
     return {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       file,
@@ -235,14 +365,14 @@ export default function DocumentScannerModal({
       filterMode: "magic",
       rotation: 0,
       contrastBoost: 35,
-      cropTop: 0,
-      cropBottom: 0,
-      cropLeft: 0,
-      cropRight: 0,
+      cropTop: autoBounds.cropTop,
+      cropBottom: autoBounds.cropBottom,
+      cropLeft: autoBounds.cropLeft,
+      cropRight: autoBounds.cropRight,
     };
   }, []);
 
-  // Initialize first page when modal opens
+  // Initialize first page when modal opens and auto-select Crop mode
   useEffect(() => {
     if (!isOpen || !imageFile) {
       setPages([]);
@@ -257,6 +387,7 @@ export default function DocumentScannerModal({
         if (!cancelled) {
           setPages([firstPage]);
           setActiveIndex(0);
+          setIsCropping(true);
         }
       })
       .catch((err) => console.error("Failed to load initial scan page:", err));
@@ -409,12 +540,13 @@ export default function DocumentScannerModal({
     }
 
     if (loadedPages.length > 0) {
-      setIsCropping(false);
       setPages((prev) => {
         const next = [...prev, ...loadedPages];
         setActiveIndex(next.length - 1);
         return next;
       });
+      // Auto-select Crop mode whenever a new page photo is captured
+      setIsCropping(true);
     }
   }
 

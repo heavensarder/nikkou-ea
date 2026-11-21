@@ -482,28 +482,28 @@ export default function StudentDetailClient({
 
           {/* Financials & Payment Installments Ledger */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-            <div className="px-6 py-4 bg-secondary/5 border-b border-slate-200 flex items-center justify-between">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-secondary/5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-secondary" />
-                <h3 className="text-base font-bold text-secondary">
+                <Wallet className="w-5 h-5 text-secondary shrink-0" />
+                <h3 className="text-sm sm:text-base font-bold text-secondary">
                   Payment Ledger &amp; Installment History
                 </h3>
               </div>
               <Link
                 href={`/students/${student.id}/edit`}
-                className="text-xs font-bold text-primary hover:underline"
+                className="text-xs font-bold text-primary hover:underline whitespace-nowrap"
               >
                 + Add / Edit Payments
               </Link>
             </div>
 
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+            <div className="p-4 sm:p-6 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                     Total Amount to be Received
                   </div>
-                  <div className="text-2xl font-extrabold text-slate-900 mt-1">
+                  <div className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">
                     ৳{" "}
                     {Math.round(
                       Number(student.total_amount || 0)
@@ -511,11 +511,11 @@ export default function StudentDetailClient({
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
-                  <div className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
                     Total Payment Received
                   </div>
-                  <div className="text-2xl font-extrabold text-emerald-700 mt-1">
+                  <div className="text-xl sm:text-2xl font-extrabold text-emerald-700 mt-1">
                     ৳{" "}
                     {Math.round(
                       Number(student.payment_received || 0)
@@ -523,11 +523,11 @@ export default function StudentDetailClient({
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200">
-                  <div className="text-xs font-bold uppercase tracking-wider text-primary">
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-rose-50 border border-rose-200">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-primary">
                     Payment Due (Auto-calculated)
                   </div>
-                  <div className="text-2xl font-extrabold text-primary mt-1">
+                  <div className="text-xl sm:text-2xl font-extrabold text-primary mt-1">
                     ৳{" "}
                     {Math.round(
                       Number(student.payment_due || 0)
@@ -537,40 +537,84 @@ export default function StudentDetailClient({
               </div>
 
               {student.payments && student.payments.length > 0 ? (
-                <div className="overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="w-full text-left border-collapse text-sm">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
-                        <th className="py-3 px-4">Installment #</th>
-                        <th className="py-3 px-4">Payment Date</th>
-                        <th className="py-3 px-4">Note / Reference</th>
-                        <th className="py-3 px-4 text-right">Amount Received</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {student.payments.map((p, idx) => (
-                        <tr key={p.id || idx}>
-                          <td className="py-3 px-4 font-bold text-slate-600">
-                            #{idx + 1}
-                          </td>
-                          <td className="py-3 px-4 font-medium text-slate-800 flex items-center gap-1.5">
-                            <Calendar className="w-3.5 h-3.5 text-secondary" />
-                            {p.payment_date}
-                          </td>
-                          <td className="py-3 px-4 text-slate-600">
-                            {p.note || "—"}
-                          </td>
-                          <td className="py-3 px-4 text-right font-bold text-emerald-700">
+                <>
+                  {/* Mobile Card List (< 640px) */}
+                  <div className="space-y-2.5 sm:hidden">
+                    {student.payments.map((p, idx) => (
+                      <div
+                        key={p.id || idx}
+                        className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-md bg-secondary/10 text-secondary text-xs font-extrabold shrink-0">
+                              #{idx + 1}
+                            </span>
+                            <span className="text-xs font-semibold text-slate-800 truncate">
+                              {p.note || `Installment #${idx + 1}`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-slate-500 whitespace-nowrap">
+                            <Calendar className="w-3.5 h-3.5 text-secondary shrink-0" />
+                            <span>{p.payment_date}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Amount
+                          </div>
+                          <div className="text-sm font-extrabold text-emerald-700 whitespace-nowrap">
                             ৳{" "}
                             {Math.round(Number(p.amount || 0)).toLocaleString(
                               "en-US"
                             )}
-                          </td>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Tablet & Desktop Table (>= 640px) */}
+                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-left border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                          <th className="py-3 px-4">Installment #</th>
+                          <th className="py-3 px-4">Payment Date</th>
+                          <th className="py-3 px-4">Note / Reference</th>
+                          <th className="py-3 px-4 text-right">
+                            Amount Received
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {student.payments.map((p, idx) => (
+                          <tr key={p.id || idx}>
+                            <td className="py-3 px-4 font-bold text-slate-600 whitespace-nowrap">
+                              #{idx + 1}
+                            </td>
+                            <td className="py-3 px-4 font-medium text-slate-800 whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-secondary shrink-0" />
+                                <span>{p.payment_date}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-slate-600">
+                              {p.note || "—"}
+                            </td>
+                            <td className="py-3 px-4 text-right font-bold text-emerald-700 whitespace-nowrap">
+                              ৳{" "}
+                              {Math.round(Number(p.amount || 0)).toLocaleString(
+                                "en-US"
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               ) : (
                 <div className="p-6 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
                   No payment installments recorded yet.

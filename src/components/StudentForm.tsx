@@ -189,7 +189,13 @@ export default function StudentForm({
     onConfirm: () => void;
   } | null>(null);
 
-  // Form Submission state
+  // Form Submission & Auto-Save state
+  const [currentStudentId, setCurrentStudentId] = useState<number | null>(
+    initialData?.id || null
+  );
+  const [autoSaveStatus, setAutoSaveStatus] = useState<
+    "idle" | "saving" | "saved"
+  >("idle");
   const [submitting, setSubmitting] = useState<"publish" | "draft" | null>(
     null
   );
@@ -368,6 +374,93 @@ export default function StudentForm({
     }
   }
 
+  // Background Auto-Save whenever an attachment or photo is uploaded or removed
+  async function autoSaveRecord(
+    overridePhotoPath?: string | null,
+    overrideAttachments?: FormAttachmentItem[]
+  ) {
+    const activePhoto =
+      overridePhotoPath !== undefined ? overridePhotoPath : photoPath;
+    const activeAttachments =
+      overrideAttachments !== undefined ? overrideAttachments : attachments;
+
+    const activeTradeObj = JOB_CATEGORIES[jobCategory].find(
+      (t) => t.value === jobTrade
+    );
+    const hasSub =
+      activeTradeObj?.subCategories && activeTradeObj.subCategories.length > 0;
+
+    // If creating a new student and applicantName isn't filled yet, auto-save as draft so it never fails validation
+    const isDraftFlag = !applicantName.trim()
+      ? true
+      : initialData
+      ? Boolean(initialData.is_draft)
+      : false;
+
+    setAutoSaveStatus("saving");
+    try {
+      const payload = {
+        applicant_name: applicantName.trim() || "Untitled Draft Student",
+        photo_path: activePhoto,
+        job_category: jobCategory,
+        job_trade: jobTrade,
+        job_sub_category: hasSub ? jobSubCategory : null,
+        gender,
+        company_name: companyName.trim(),
+        company_address: companyAddress.trim(),
+        supervising_organization: supervisingOrg.trim(),
+        total_amount: parsedTotalAmount,
+        payments: payments.map((p) => ({
+          amount: Number(p.amount) || 0,
+          payment_date:
+            p.payment_date || new Date().toISOString().slice(0, 10),
+          note: p.note || "",
+        })),
+        bd_phone: bdPhone.trim(),
+        jp_phone: jpPhone.trim(),
+        email: email.trim(),
+        whatsapp: whatsapp.trim(),
+        facebook: facebook.trim(),
+        status,
+        is_draft: isDraftFlag,
+        attachments: activeAttachments.map((a) => ({
+          attachment_type: a.attachment_type,
+          title: a.title || null,
+          file_name: formatAttachmentFileName(
+            applicantName,
+            a.title || getAttachmentLabel(a.attachment_type),
+            a.file_path || a.file_name
+          ),
+          file_path: a.file_path,
+          mime_type: a.mime_type,
+          file_size: a.file_size,
+        })),
+      };
+
+      const url = currentStudentId
+        ? `/api/students/${currentStudentId}`
+        : "/api/students";
+      const method = currentStudentId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (!currentStudentId && data.id) {
+          setCurrentStudentId(data.id);
+        }
+        setAutoSaveStatus("saved");
+      } else {
+        setAutoSaveStatus("idle");
+      }
+    } catch {
+      setAutoSaveStatus("idle");
+    }
+  }
+
   // Handle Applicant Photo Upload
   const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -404,10 +497,12 @@ export default function StudentForm({
         throw new Error(data.error || "Failed to upload photo");
       }
       const previousPhoto = photoPath;
-      setPhotoPath(data.file.file_path);
-      if (previousPhoto && previousPhoto !== data.file.file_path) {
+      const newPhotoUrl = data.file.file_path;
+      setPhotoPath(newPhotoUrl);
+      if (previousPhoto && previousPhoto !== newPhotoUrl) {
         deleteFileFromServer(previousPhoto);
       }
+      await autoSaveRecord(newPhotoUrl, undefined);
     } catch (err: unknown) {
       setErrorMessage(
         err instanceof Error ? err.message : "Failed to upload applicant photo"
@@ -501,20 +596,21 @@ export default function StudentForm({
         }
       }
 
-      setAttachments((prev) => {
-        if (!isMultiple) {
-          // Replace existing attachment of this single-document type
-          const filtered = prev.filter(
-            (a) => a.attachment_type !== attachmentKey
-          );
-          return [...filtered, ...uploadedItems];
-        }
-        return [...prev, ...uploadedItems];
-      });
+      const nextAttachmentsList = !isMultiple
+        ? [
+            ...attachments.filter((a) => a.attachment_type !== attachmentKey),
+            ...uploadedItems,
+          ]
+        : [...attachments, ...uploadedItems];
+
+      setAttachments(nextAttachmentsList);
 
       if (requiresTitle) {
         setPendingTitles((prev) => ({ ...prev, [attachmentKey]: "" }));
       }
+
+      // Auto-save student record immediately after attachment upload
+      await autoSaveRecord(undefined, nextAttachmentsList);
     } catch (err: unknown) {
       setErrorMessage(
         err instanceof Error ? err.message : "Failed to upload attachment"
@@ -557,10 +653,12 @@ export default function StudentForm({
         "Are you sure you want to delete this attachment? It will also be permanently removed from the server storage.",
       itemName: displayName,
       confirmText: "Delete Document",
-      onConfirm: () => {
+      onConfirm: async () => {
         deleteFileFromServer(target.file_path, target.id);
-        setAttachments((prev) => prev.filter((att) => att.tempId !== tempId));
+        const updatedList = attachments.filter((att) => att.tempId !== tempId);
+        setAttachments(updatedList);
         setConfirmDialog(null);
+        await autoSaveRecord(undefined, updatedList);
       },
     });
   }
@@ -577,10 +675,11 @@ export default function StudentForm({
         photoPath
       ),
       confirmText: "Delete Photo",
-      onConfirm: () => {
+      onConfirm: async () => {
         deleteFileFromServer(photoPath);
         setPhotoPath(null);
         setConfirmDialog(null);
+        await autoSaveRecord(null, undefined);
       },
     });
   }
@@ -694,11 +793,9 @@ export default function StudentForm({
         })),
       };
 
-      const url =
-        isEditMode && initialData?.id
-          ? `/api/students/${initialData.id}`
-          : "/api/students";
-      const method = isEditMode && initialData?.id ? "PUT" : "POST";
+      const targetId = currentStudentId || initialData?.id;
+      const url = targetId ? `/api/students/${targetId}` : "/api/students";
+      const method = targetId ? "PUT" : "POST";
 
       const res = await fetch(url, {
         method,
@@ -1669,7 +1766,19 @@ export default function StudentForm({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {autoSaveStatus === "saving" && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-secondary border border-blue-200">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Auto-saving...
+              </span>
+            )}
+            {autoSaveStatus === "saved" && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Auto-saved
+              </span>
+            )}
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
               {
                 ATTACHMENT_TYPES.filter((cfg) =>
