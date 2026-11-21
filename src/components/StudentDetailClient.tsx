@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppShell from "./AppShell";
 import AttachmentPreviewModal from "./AttachmentPreviewModal";
+import ConfirmModal from "./ConfirmModal";
 import {
   ATTACHMENT_TYPES,
   formatAttachmentFileName,
@@ -44,6 +45,12 @@ export default function StudentDetailClient({
   const [loading, setLoading] = useState(true);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<
     number | null
+  >(null);
+  const [deletingStudent, setDeletingStudent] = useState(false);
+  const [confirmState, setConfirmState] = useState<
+    | { type: "student" }
+    | { type: "attachment"; attachment: StudentAttachment }
+    | null
   >(null);
   const [previewItem, setPreviewItem] = useState<{
     fileUrl: string;
@@ -104,49 +111,55 @@ export default function StudentDetailClient({
     }
   }
 
-  async function handleDeleteAttachment(att: StudentAttachment) {
-    const confirmed = window.confirm(
-      `Delete attachment "${att.title || att.file_name}"?`
-    );
-    if (!confirmed) return;
-
-    setDeletingAttachmentId(att.id);
-    try {
-      const res = await fetch(`/api/attachments/${att.id}`, {
-        method: "DELETE",
-      });
-      if (res.ok && student) {
-        setStudent({
-          ...student,
-          attachments: (student.attachments || []).filter(
-            (a) => a.id !== att.id
-          ),
-        });
-      }
-    } catch (err) {
-      console.error("Failed to delete attachment:", err);
-    } finally {
-      setDeletingAttachmentId(null);
-    }
+  function handleDeleteAttachment(att: StudentAttachment) {
+    setConfirmState({ type: "attachment", attachment: att });
   }
 
-  async function handleDeleteStudent() {
+  function handleDeleteStudent() {
     if (!student) return;
-    const confirmed = window.confirm(
-      `Are you sure you want to permanently delete "${student.applicant_name}"?`
-    );
-    if (!confirmed) return;
+    setConfirmState({ type: "student" });
+  }
 
-    try {
-      const res = await fetch(`/api/students/${student.id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        router.push("/students");
-        router.refresh();
+  async function executeConfirmDelete() {
+    if (!confirmState || !student) return;
+
+    if (confirmState.type === "attachment") {
+      const att = confirmState.attachment;
+      setDeletingAttachmentId(att.id);
+      try {
+        const res = await fetch(`/api/attachments/${att.id}`, {
+          method: "DELETE",
+        });
+        if (res.ok) {
+          setStudent({
+            ...student,
+            attachments: (student.attachments || []).filter(
+              (a) => a.id !== att.id
+            ),
+          });
+          setConfirmState(null);
+        }
+      } catch (err) {
+        console.error("Failed to delete attachment:", err);
+      } finally {
+        setDeletingAttachmentId(null);
       }
-    } catch (err) {
-      console.error("Delete student error:", err);
+    } else if (confirmState.type === "student") {
+      setDeletingStudent(true);
+      try {
+        const res = await fetch(`/api/students/${student.id}`, {
+          method: "DELETE",
+        });
+        if (res.ok) {
+          setConfirmState(null);
+          router.push("/students");
+          router.refresh();
+        }
+      } catch (err) {
+        console.error("Delete student error:", err);
+      } finally {
+        setDeletingStudent(false);
+      }
     }
   }
 
@@ -568,144 +581,310 @@ export default function StudentDetailClient({
 
           {/* Attachments Dossier (All 11 Categories with View, Download, Delete) */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-            <div className="px-6 py-4 bg-secondary/5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-secondary" />
+            <div className="px-4 sm:px-6 py-4 bg-secondary/5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <FileText className="w-5 h-5 text-secondary shrink-0" />
                 <div>
-                  <h3 className="text-base font-bold text-secondary">
-                    Attachments &amp; Verification Documents (11 Categories)
+                  <h3 className="text-sm sm:text-base font-bold text-secondary">
+                    Student Attachments &amp; Verification Documents
                   </h3>
                   <p className="text-xs text-slate-500">
-                    View, download, or delete any uploaded student document
+                    View, download, or delete any uploaded student document. Uploaded fields are highlighted in green.
                   </p>
                 </div>
               </div>
-              <Link
-                href={`/students/${student.id}/edit`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-secondary text-white text-xs font-semibold hover:bg-secondary-hover transition"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Upload / Manage Attachments</span>
-              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  {
+                    ATTACHMENT_TYPES.filter((cfg) =>
+                      (student.attachments || []).some(
+                        (a) => a.attachment_type === cfg.key
+                      )
+                    ).length
+                  }{" "}
+                  / {ATTACHMENT_TYPES.length} Categories Uploaded
+                </span>
+                <Link
+                  href={`/students/${student.id}/edit`}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-secondary text-white text-xs font-semibold hover:bg-secondary-hover transition"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Upload / Manage Attachments</span>
+                </Link>
+              </div>
             </div>
 
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
-              {ATTACHMENT_TYPES.map((config) => {
-                const files = (student.attachments || []).filter(
-                  (a) => a.attachment_type === config.key
-                );
+            <div className="p-4 sm:p-6 space-y-6">
+              {/* 1. Standard Single-Document Categories (9 items -> 3x3 symmetrical grid on desktop, 2-col on tablet) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {ATTACHMENT_TYPES.filter((c) => !c.multiple).map((config) => {
+                  const files = (student.attachments || []).filter(
+                    (a) => a.attachment_type === config.key
+                  );
+                  const hasUploaded = files.length > 0;
 
-                return (
-                  <div
-                    key={config.key}
-                    className={`rounded-2xl border p-4 ${
-                      config.multiple ? "md:col-span-2" : ""
-                    } ${
-                      files.length > 0
-                        ? "border-secondary/30 bg-white"
-                        : "border-slate-200 bg-slate-50/60"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-6 h-6 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center shrink-0">
-                          <FileText className="w-3.5 h-3.5" />
+                  return (
+                    <div
+                      key={config.key}
+                      className={`rounded-2xl p-4 flex flex-col justify-between transition-all ${
+                        hasUploaded
+                          ? "bg-emerald-50/85 border-2 border-emerald-400 shadow-sm ring-1 ring-emerald-500/10"
+                          : "border border-slate-200 bg-slate-50/60"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                              hasUploaded
+                                ? "bg-emerald-600 text-white shadow-2xs"
+                                : "bg-secondary/10 text-secondary"
+                            }`}
+                          >
+                            {hasUploaded ? (
+                              <CheckCircle2 className="w-4 h-4" />
+                            ) : (
+                              <FileText className="w-3.5 h-3.5" />
+                            )}
+                          </span>
+                          <h4
+                            className={`text-sm font-bold truncate ${
+                              hasUploaded
+                                ? "text-emerald-950"
+                                : "text-slate-800"
+                            }`}
+                            title={config.label}
+                          >
+                            {config.label}
+                          </h4>
+                        </div>
+                        <span
+                          className={`whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10.5px] font-bold shrink-0 ${
+                            hasUploaded
+                              ? "bg-emerald-600 text-white shadow-2xs"
+                              : "bg-slate-200 text-slate-600"
+                          }`}
+                        >
+                          {hasUploaded ? "Uploaded" : "Not Uploaded"}
                         </span>
-                        <h4 className="text-sm font-bold text-slate-800">
-                          {config.label}
-                        </h4>
                       </div>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                          files.length > 0
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-slate-200 text-slate-600"
-                        }`}
-                      >
-                        {files.length > 0
-                          ? `${files.length} Attached`
-                          : "Not Uploaded"}
-                      </span>
-                    </div>
 
-                    {files.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic">
-                        No file uploaded for {config.label}.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {files.map((att) => {
-                          const formattedFileName = formatAttachmentFileName(
-                            student.applicant_name,
-                            att.title || config.label,
-                            att.file_path || att.file_name
-                          );
-                          const downloadHref = `${att.file_path}${
-                            att.file_path.includes("?") ? "&" : "?"
-                          }download=1&name=${encodeURIComponent(
-                            formattedFileName
-                          )}`;
+                      {!hasUploaded ? (
+                        <p className="text-xs text-slate-400 italic py-2">
+                          No file uploaded for {config.label}.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {files.map((att) => {
+                            const formattedFileName = formatAttachmentFileName(
+                              student.applicant_name,
+                              att.title || config.label,
+                              att.file_path || att.file_name
+                            );
+                            const downloadHref = `${att.file_path}${
+                              att.file_path.includes("?") ? "&" : "?"
+                            }download=1&name=${encodeURIComponent(
+                              formattedFileName
+                            )}`;
 
-                          return (
-                            <div
-                              key={att.id}
-                              className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                            >
-                              <div className="min-w-0">
-                                {att.title && (
-                                  <div className="text-xs font-bold text-secondary">
-                                    {att.title}
+                            return (
+                              <div
+                                key={att.id}
+                                className="p-2.5 rounded-xl bg-white border border-emerald-200 shadow-2xs space-y-2"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  <div
+                                    className="text-xs font-bold text-slate-800 truncate flex-1"
+                                    title={formattedFileName}
+                                  >
+                                    {formattedFileName}
                                   </div>
-                                )}
-                                <div className="text-xs text-slate-600 truncate">
-                                  {formattedFileName}
+                                </div>
+
+                                <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setPreviewItem({
+                                        fileUrl: att.file_path,
+                                        fileName: formattedFileName,
+                                        title: att.title || config.label,
+                                        mimeType: att.mime_type,
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary hover:text-white text-xs font-semibold transition"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>View</span>
+                                  </button>
+
+                                  <a
+                                    href={downloadHref}
+                                    download={formattedFileName}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold transition"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                    <span>Download</span>
+                                  </a>
+
+                                  <button
+                                    type="button"
+                                    disabled={deletingAttachmentId === att.id}
+                                    onClick={() => handleDeleteAttachment(att)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-primary hover:bg-primary hover:text-white text-xs font-semibold transition disabled:opacity-40"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Delete</span>
+                                  </button>
                                 </div>
                               </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setPreviewItem({
-                                      fileUrl: att.file_path,
-                                      fileName: formattedFileName,
-                                      title: att.title || config.label,
-                                      mimeType: att.mime_type,
-                                    })
-                                  }
-                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary hover:text-white text-xs font-semibold transition"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>View</span>
-                                </button>
+              {/* 2. Multi-Document Categories (Medical Reports & Educational Certificates -> 2-col side-by-side grid) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {ATTACHMENT_TYPES.filter((c) => c.multiple).map((config) => {
+                  const files = (student.attachments || []).filter(
+                    (a) => a.attachment_type === config.key
+                  );
+                  const hasUploaded = files.length > 0;
 
-                                <a
-                                  href={downloadHref}
-                                  download={formattedFileName}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Download</span>
-                                </a>
-
-                                <button
-                                  type="button"
-                                  disabled={deletingAttachmentId === att.id}
-                                  onClick={() => handleDeleteAttachment(att)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 text-primary hover:bg-primary hover:text-white text-xs font-semibold transition disabled:opacity-40"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  <span>Delete</span>
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
+                  return (
+                    <div
+                      key={config.key}
+                      className={`rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all ${
+                        hasUploaded
+                          ? "bg-emerald-50/85 border-2 border-emerald-400 shadow-sm ring-1 ring-emerald-500/10"
+                          : "border border-slate-200 bg-slate-50/60"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                              hasUploaded
+                                ? "bg-emerald-600 text-white shadow-2xs"
+                                : "bg-secondary/10 text-secondary"
+                            }`}
+                          >
+                            {hasUploaded ? (
+                              <CheckCircle2 className="w-4 h-4" />
+                            ) : (
+                              <FileText className="w-3.5 h-3.5" />
+                            )}
+                          </span>
+                          <h4
+                            className={`text-sm font-bold ${
+                              hasUploaded
+                                ? "text-emerald-950"
+                                : "text-slate-800"
+                            }`}
+                          >
+                            {config.label}
+                          </h4>
+                        </div>
+                        <span
+                          className={`whitespace-nowrap px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                            hasUploaded
+                              ? "bg-emerald-600 text-white shadow-2xs"
+                              : "bg-slate-200 text-slate-600"
+                          }`}
+                        >
+                          {hasUploaded
+                            ? `${files.length} Attached`
+                            : "Not Uploaded"}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+
+                      {!hasUploaded ? (
+                        <p className="text-xs text-slate-400 italic py-2">
+                          No files uploaded for {config.label}.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {files.map((att) => {
+                            const formattedFileName = formatAttachmentFileName(
+                              student.applicant_name,
+                              att.title || config.label,
+                              att.file_path || att.file_name
+                            );
+                            const downloadHref = `${att.file_path}${
+                              att.file_path.includes("?") ? "&" : "?"
+                            }download=1&name=${encodeURIComponent(
+                              formattedFileName
+                            )}`;
+
+                            return (
+                              <div
+                                key={att.id}
+                                className="p-3 rounded-xl bg-white border border-emerald-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                              >
+                                <div className="min-w-0">
+                                  {att.title && (
+                                    <div className="text-xs font-bold text-emerald-800">
+                                      {att.title}
+                                    </div>
+                                  )}
+                                  <div
+                                    className="text-xs font-semibold text-slate-700 truncate"
+                                    title={formattedFileName}
+                                  >
+                                    {formattedFileName}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setPreviewItem({
+                                        fileUrl: att.file_path,
+                                        fileName: formattedFileName,
+                                        title: att.title || config.label,
+                                        mimeType: att.mime_type,
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary hover:text-white text-xs font-semibold transition"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>View</span>
+                                  </button>
+
+                                  <a
+                                    href={downloadHref}
+                                    download={formattedFileName}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold transition"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                    <span>Download</span>
+                                  </a>
+
+                                  <button
+                                    type="button"
+                                    disabled={deletingAttachmentId === att.id}
+                                    onClick={() => handleDeleteAttachment(att)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 text-primary hover:bg-primary hover:text-white text-xs font-semibold transition disabled:opacity-40"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Delete</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -718,6 +897,35 @@ export default function StudentDetailClient({
         fileName={previewItem?.fileName || ""}
         title={previewItem?.title}
         mimeType={previewItem?.mimeType}
+      />
+
+      <ConfirmModal
+        isOpen={Boolean(confirmState)}
+        onClose={() => setConfirmState(null)}
+        onConfirm={executeConfirmDelete}
+        title={
+          confirmState?.type === "student"
+            ? "Delete Student Record?"
+            : "Delete Attachment?"
+        }
+        message={
+          confirmState?.type === "student"
+            ? "Are you sure you want to permanently delete this student record along with all payment records and uploaded files from the server? This action cannot be undone."
+            : "Are you sure you want to permanently remove this document from the student record and server storage?"
+        }
+        itemName={
+          confirmState?.type === "student"
+            ? student?.applicant_name
+            : confirmState?.type === "attachment"
+            ? confirmState.attachment.title || confirmState.attachment.file_name
+            : undefined
+        }
+        confirmText={
+          confirmState?.type === "student"
+            ? "Delete Student"
+            : "Delete Document"
+        }
+        loading={deletingStudent || deletingAttachmentId !== null}
       />
     </AppShell>
   );

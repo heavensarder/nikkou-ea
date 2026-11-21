@@ -14,6 +14,7 @@ import {
   StudentRecord,
 } from "@/lib/constants";
 import AttachmentPreviewModal from "./AttachmentPreviewModal";
+import ConfirmModal from "./ConfirmModal";
 import {
   Upload,
   Trash2,
@@ -177,6 +178,15 @@ export default function StudentForm({
     mimeType?: string;
   } | null>(null);
 
+  // Confirm Delete Modal state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    itemName?: string;
+    confirmText?: string;
+    onConfirm: () => void;
+  } | null>(null);
+
   // Form Submission state
   const [submitting, setSubmitting] = useState<"publish" | "draft" | null>(
     null
@@ -261,25 +271,38 @@ export default function StudentForm({
     }
   }
 
-  async function removeOrganizationSuggestion(
+  function removeOrganizationSuggestion(
     type: "company" | "supervising",
     name: string
   ) {
-    if (type === "company") {
-      setSavedCompanies((prev) => prev.filter((c) => c !== name));
-    } else {
-      setSavedSupervisingOrgs((prev) => prev.filter((s) => s !== name));
-    }
+    setConfirmDialog({
+      title:
+        type === "company"
+          ? "Remove Company Suggestion?"
+          : "Remove Supervising Organization?",
+      message:
+        "This organization will be removed from the saved autocomplete suggestions list.",
+      itemName: name,
+      confirmText: "Remove Suggestion",
+      onConfirm: async () => {
+        if (type === "company") {
+          setSavedCompanies((prev) => prev.filter((c) => c !== name));
+        } else {
+          setSavedSupervisingOrgs((prev) => prev.filter((s) => s !== name));
+        }
+        setConfirmDialog(null);
 
-    try {
-      await fetch("/api/organizations", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ org_type: type, name }),
-      });
-    } catch {
-      // ignore
-    }
+        try {
+          await fetch("/api/organizations", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ org_type: type, name }),
+          });
+        } catch {
+          // ignore
+        }
+      },
+    });
   }
 
   async function deleteFileFromServer(filePath: string | null | undefined, attachmentId?: number) {
@@ -509,17 +532,45 @@ export default function StudentForm({
 
   function handleDeleteAttachment(tempId: string) {
     const target = attachments.find((att) => att.tempId === tempId);
-    if (target) {
-      deleteFileFromServer(target.file_path, target.id);
-    }
-    setAttachments((prev) => prev.filter((att) => att.tempId !== tempId));
+    if (!target) return;
+    const displayName = formatAttachmentFileName(
+      applicantName,
+      target.title || getAttachmentLabel(target.attachment_type),
+      target.file_path || target.file_name
+    );
+
+    setConfirmDialog({
+      title: "Delete Attachment?",
+      message:
+        "Are you sure you want to delete this attachment? It will also be permanently removed from the server storage.",
+      itemName: displayName,
+      confirmText: "Delete Document",
+      onConfirm: () => {
+        deleteFileFromServer(target.file_path, target.id);
+        setAttachments((prev) => prev.filter((att) => att.tempId !== tempId));
+        setConfirmDialog(null);
+      },
+    });
   }
 
   function handleDeletePhoto() {
-    if (photoPath) {
-      deleteFileFromServer(photoPath);
-    }
-    setPhotoPath(null);
+    if (!photoPath) return;
+    setConfirmDialog({
+      title: "Delete Applicant Photo?",
+      message:
+        "Are you sure you want to remove the applicant photo? The image file will also be deleted from server storage.",
+      itemName: formatAttachmentFileName(
+        applicantName,
+        "Applicant Photo",
+        photoPath
+      ),
+      confirmText: "Delete Photo",
+      onConfirm: () => {
+        deleteFileFromServer(photoPath);
+        setPhotoPath(null);
+        setConfirmDialog(null);
+      },
+    });
   }
 
   // Payment Installments Handlers
@@ -545,6 +596,22 @@ export default function StudentForm({
   }
 
   function removePaymentRow(index: number) {
+    const row = payments[index];
+    if (row && Number(row.amount) > 0) {
+      setConfirmDialog({
+        title: "Remove Payment Entry?",
+        message: "Are you sure you want to remove this payment installment entry?",
+        itemName: `Installment #${index + 1} — ৳${Math.round(
+          Number(row.amount)
+        ).toLocaleString("en-US")} (${row.payment_date})`,
+        confirmText: "Remove Entry",
+        onConfirm: () => {
+          setPayments((prev) => prev.filter((_, idx) => idx !== index));
+          setConfirmDialog(null);
+        },
+      });
+      return;
+    }
     setPayments((prev) => prev.filter((_, idx) => idx !== index));
   }
 
@@ -1578,258 +1645,538 @@ export default function StudentForm({
 
       {/* SECTION 5: Attachments (11 Document Categories with Drag & Drop + View/Download/Delete) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="px-6 py-4 bg-secondary/5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+        <div className="px-4 sm:px-6 py-4 bg-secondary/5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <FileText className="w-5 h-5 text-secondary" />
+            <FileText className="w-5 h-5 text-secondary shrink-0" />
             <div>
-              <h3 className="text-base font-bold text-secondary">
+              <h3 className="text-sm sm:text-base font-bold text-secondary">
                 Student Attachments &amp; Verification Documents
               </h3>
               <p className="text-xs text-slate-500">
-                Select file or drag and drop PDF / Image / Document files (Max 5 MB per file). All attachments support View, Download, and Delete.
+                Select file or drag and drop PDF / Image / Document files (Max 5 MB per file). Uploaded fields are highlighted in green.
               </p>
             </div>
           </div>
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-secondary/10 text-secondary">
-            {attachments.length} Total File(s) Attached
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+              {
+                ATTACHMENT_TYPES.filter((cfg) =>
+                  attachments.some((a) => a.attachment_type === cfg.key)
+                ).length
+              }{" "}
+              / {ATTACHMENT_TYPES.length} Categories Uploaded
+            </span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-secondary/10 text-secondary">
+              {attachments.length} Total File(s)
+            </span>
+          </div>
         </div>
 
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {ATTACHMENT_TYPES.map((config) => {
-            const matchingFiles = attachments.filter(
-              (a) => a.attachment_type === config.key
-            );
-            const isUploading = uploadingKey === config.key;
-            const isDragOver = dragOverKey === config.key;
+        <div className="p-4 sm:p-6 space-y-6">
+          {/* 1. Standard Single-Document Categories (9 items -> 3x3 symmetrical grid on desktop, 2-col on tablet) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {ATTACHMENT_TYPES.filter((c) => !c.multiple).map((config) => {
+              const matchingFiles = attachments.filter(
+                (a) => a.attachment_type === config.key
+              );
+              const hasUploaded = matchingFiles.length > 0;
+              const isUploading = uploadingKey === config.key;
+              const isDragOver = dragOverKey === config.key;
 
-            return (
-              <div
-                key={config.key}
-                className={`rounded-2xl border p-5 flex flex-col justify-between transition-all ${
-                  config.multiple ? "md:col-span-2 bg-slate-50/50" : "bg-white"
-                } ${
-                  matchingFiles.length > 0
-                    ? "border-secondary/40 shadow-xs"
-                    : "border-slate-200"
-                }`}
-              >
-                <div>
-                  {/* Card Header */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-start gap-2.5">
-                      <span className="w-7 h-7 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center shrink-0 mt-0.5">
-                        <FileText className="w-4 h-4" />
-                      </span>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-800">
-                          {config.label}
-                        </h4>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {config.description}
-                        </p>
+              return (
+                <div
+                  key={config.key}
+                  className={`rounded-2xl p-4 flex flex-col justify-between transition-all ${
+                    hasUploaded
+                      ? "bg-emerald-50/85 border-2 border-emerald-400 shadow-sm ring-1 ring-emerald-500/10"
+                      : "bg-slate-50/50 border border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <div>
+                    {/* Card Header */}
+                    <div className="flex items-start justify-between gap-2.5 mb-3">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <span
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 transition ${
+                            hasUploaded
+                              ? "bg-emerald-600 text-white shadow-2xs"
+                              : "bg-secondary/10 text-secondary"
+                          }`}
+                        >
+                          {hasUploaded ? (
+                            <CheckCircle2 className="w-4 h-4" />
+                          ) : (
+                            <FileText className="w-4 h-4" />
+                          )}
+                        </span>
+                        <div className="min-w-0">
+                          <h4
+                            className={`text-sm font-bold truncate ${
+                              hasUploaded
+                                ? "text-emerald-950"
+                                : "text-slate-800"
+                            }`}
+                            title={config.label}
+                          >
+                            {config.label}
+                          </h4>
+                          <p
+                            className={`text-[11px] mt-0.5 line-clamp-1 ${
+                              hasUploaded
+                                ? "text-emerald-700 font-medium"
+                                : "text-slate-500"
+                            }`}
+                            title={config.description}
+                          >
+                            {config.description}
+                          </p>
+                        </div>
                       </div>
+
+                      {hasUploaded ? (
+                        <span className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-600 text-white shrink-0 shadow-2xs">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Uploaded
+                        </span>
+                      ) : (
+                        <span className="whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200/80 text-slate-600 shrink-0">
+                          Empty
+                        </span>
+                      )}
                     </div>
 
-                    {matchingFiles.length > 0 && (
-                      <span className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 shrink-0">
-                        <CheckCircle2 className="w-3 h-3" />
-                        {matchingFiles.length} {matchingFiles.length === 1 ? "file" : "files"}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Optional Pre-upload Title Input for Multi-upload Categories (#4 Medical Reports & #10 Educational Certificates) */}
-                  {config.requiresTitle && (
-                    <div className="mb-3">
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">
-                        Document Title (for next upload — can also be edited below after upload)
-                      </label>
-                      <input
-                        type="text"
-                        value={pendingTitles[config.key] || ""}
-                        onChange={(e) =>
-                          setPendingTitles((prev) => ({
-                            ...prev,
-                            [config.key]: e.target.value,
-                          }))
-                        }
-                        placeholder={
-                          config.key === "medical_reports"
-                            ? "e.g., Initial Medical Checkup / Final GAMCA Medical Report"
-                            : "e.g., SSC Certificate / HSC Transcript / JLPT N4 Certificate"
-                        }
-                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs focus:outline-none focus:border-secondary"
-                      />
-                    </div>
-                  )}
-
-                  {/* Drag and Drop Zone */}
-                  <div
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setDragOverKey(config.key);
-                    }}
-                    onDragLeave={() => setDragOverKey(null)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setDragOverKey(null);
-                      if (
-                        e.dataTransfer.files &&
-                        e.dataTransfer.files.length > 0
-                      ) {
-                        handleAttachmentFiles(
-                          config.key,
-                          e.dataTransfer.files,
-                          config.multiple,
-                          config.requiresTitle
-                        );
-                      }
-                    }}
-                    onClick={() => fileInputRefs.current[config.key]?.click()}
-                    className={`cursor-pointer rounded-xl border-2 border-dashed p-4 text-center transition ${
-                      isDragOver
-                        ? "border-primary bg-primary/5"
-                        : "border-slate-300 hover:border-secondary bg-slate-50/70 hover:bg-secondary/[0.03]"
-                    }`}
-                  >
-                    <input
-                      ref={(el) => {
-                        fileInputRefs.current[config.key] = el;
+                    {/* Drag and Drop Zone */}
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverKey(config.key);
                       }}
-                      type="file"
-                      multiple={config.multiple}
-                      accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,image/*,application/pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
+                      onDragLeave={() => setDragOverKey(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragOverKey(null);
+                        if (
+                          e.dataTransfer.files &&
+                          e.dataTransfer.files.length > 0
+                        ) {
                           handleAttachmentFiles(
                             config.key,
-                            e.target.files,
+                            e.dataTransfer.files,
                             config.multiple,
                             config.requiresTitle
                           );
-                          e.target.value = "";
                         }
                       }}
-                    />
+                      onClick={() => fileInputRefs.current[config.key]?.click()}
+                      className={`cursor-pointer rounded-xl border-2 border-dashed p-3 text-center transition ${
+                        isDragOver
+                          ? "border-primary bg-primary/5"
+                          : hasUploaded
+                          ? "border-emerald-300 bg-white/80 hover:border-emerald-500 hover:bg-white"
+                          : "border-slate-300 hover:border-secondary bg-white hover:bg-secondary/[0.02]"
+                      }`}
+                    >
+                      <input
+                        ref={(el) => {
+                          fileInputRefs.current[config.key] = el;
+                        }}
+                        type="file"
+                        multiple={false}
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,image/*,application/pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            handleAttachmentFiles(
+                              config.key,
+                              e.target.files,
+                              config.multiple,
+                              config.requiresTitle
+                            );
+                            e.target.value = "";
+                          }
+                        }}
+                      />
 
-                    {isUploading ? (
-                      <div className="py-2 flex items-center justify-center gap-2 text-secondary text-xs font-semibold">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Uploading document(s)...</span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs text-slate-600">
-                        <Upload className="w-4 h-4 text-secondary shrink-0" />
-                        <span>
-                          <strong className="text-secondary">
-                            Drag &amp; drop
-                          </strong>{" "}
-                          {config.multiple ? "files" : "file"} here, or{" "}
-                          <span className="text-primary font-semibold underline">
-                            browse to upload
-                          </span>{" "}
-                          (PDF or Image • Max 5 MB)
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                      {isUploading ? (
+                        <div className="py-1 flex items-center justify-center gap-2 text-secondary text-xs font-semibold">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Uploading...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-1.5 text-xs text-slate-600">
+                          <Upload className="w-3.5 h-3.5 text-secondary shrink-0" />
+                          <span>
+                            {hasUploaded ? (
+                              <>
+                                <strong className="text-emerald-800">
+                                  Replace file
+                                </strong>{" "}
+                                or drop new (Max 5 MB)
+                              </>
+                            ) : (
+                              <>
+                                <strong className="text-secondary">
+                                  Drag &amp; drop
+                                </strong>{" "}
+                                or{" "}
+                                <span className="text-primary font-semibold underline">
+                                  browse
+                                </span>{" "}
+                                (Max 5 MB)
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Uploaded Files List for this Category */}
-                  {matchingFiles.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {matchingFiles.map((att) => {
-                        const formattedFileName = formatAttachmentFileName(
-                          applicantName,
-                          att.title || config.label,
-                          att.file_path || att.file_name
-                        );
-                        const downloadHref = `${att.file_path}${
-                          att.file_path.includes("?") ? "&" : "?"
-                        }download=1&name=${encodeURIComponent(formattedFileName)}`;
+                    {/* Uploaded File Card */}
+                    {hasUploaded && (
+                      <div className="mt-2.5 space-y-2">
+                        {matchingFiles.map((att) => {
+                          const formattedFileName = formatAttachmentFileName(
+                            applicantName,
+                            att.title || config.label,
+                            att.file_path || att.file_name
+                          );
+                          const downloadHref = `${att.file_path}${
+                            att.file_path.includes("?") ? "&" : "?"
+                          }download=1&name=${encodeURIComponent(
+                            formattedFileName
+                          )}`;
 
-                        return (
-                          <div
-                            key={att.tempId}
-                            className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                          >
-                            <div className="min-w-0 flex-1 space-y-1.5">
-                              {config.requiresTitle && (
-                                <input
-                                  type="text"
-                                  value={att.title}
-                                  onChange={(e) =>
-                                    handleUpdateAttachmentTitle(
-                                      att.tempId,
-                                      e.target.value
-                                    )
-                                  }
-                                  placeholder="Enter Document Title..."
-                                  className="w-full px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-semibold text-secondary focus:outline-none focus:border-primary"
-                                />
-                              )}
+                          return (
+                            <div
+                              key={att.tempId}
+                              className="p-2.5 rounded-xl bg-white border border-emerald-200 shadow-2xs space-y-2"
+                            >
                               <div className="flex items-center gap-2 min-w-0">
-                                <FileText className="w-4 h-4 text-secondary shrink-0" />
-                                <span className="text-xs font-medium text-slate-700 truncate">
+                                <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span
+                                  className="text-xs font-bold text-slate-800 truncate flex-1"
+                                  title={formattedFileName}
+                                >
                                   {formattedFileName}
                                 </span>
                                 <span className="text-[10px] text-slate-400 shrink-0">
-                                  ({formatFileSize(att.file_size)})
+                                  {formatFileSize(att.file_size)}
                                 </span>
                               </div>
+
+                              <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPreviewItem({
+                                      fileUrl: att.file_path,
+                                      fileName: formattedFileName,
+                                      title: att.title || config.label,
+                                      mimeType: att.mime_type,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary hover:text-white text-xs font-semibold transition"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>View</span>
+                                </button>
+
+                                <a
+                                  href={downloadHref}
+                                  download={formattedFileName}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold transition"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download</span>
+                                </a>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleDeleteAttachment(att.tempId)
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-primary hover:bg-primary hover:text-white text-xs font-semibold transition"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
                             </div>
-
-                            {/* Action Buttons: View, Download, Delete */}
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setPreviewItem({
-                                    fileUrl: att.file_path,
-                                    fileName: formattedFileName,
-                                    title: att.title || config.label,
-                                    mimeType: att.mime_type,
-                                  })
-                                }
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary hover:text-white text-xs font-semibold transition"
-                                title="View Attachment"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>View</span>
-                              </button>
-
-                              <a
-                                href={downloadHref}
-                                download={formattedFileName}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold transition"
-                                title="Download Attachment"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                                <span>Download</span>
-                              </a>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleDeleteAttachment(att.tempId)
-                                }
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 text-primary hover:bg-primary hover:text-white text-xs font-semibold transition"
-                                title="Delete Attachment"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Delete</span>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+
+          {/* 2. Multi-Document Categories (Medical Reports & Educational Certificates -> 2-col side-by-side grid) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {ATTACHMENT_TYPES.filter((c) => c.multiple).map((config) => {
+              const matchingFiles = attachments.filter(
+                (a) => a.attachment_type === config.key
+              );
+              const hasUploaded = matchingFiles.length > 0;
+              const isUploading = uploadingKey === config.key;
+              const isDragOver = dragOverKey === config.key;
+
+              return (
+                <div
+                  key={config.key}
+                  className={`rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all ${
+                    hasUploaded
+                      ? "bg-emerald-50/85 border-2 border-emerald-400 shadow-sm ring-1 ring-emerald-500/10"
+                      : "bg-slate-50/50 border border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <div>
+                    {/* Card Header */}
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-start gap-2.5">
+                        <span
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 transition ${
+                            hasUploaded
+                              ? "bg-emerald-600 text-white shadow-2xs"
+                              : "bg-secondary/10 text-secondary"
+                          }`}
+                        >
+                          {hasUploaded ? (
+                            <CheckCircle2 className="w-4 h-4" />
+                          ) : (
+                            <FileText className="w-4 h-4" />
+                          )}
+                        </span>
+                        <div>
+                          <h4
+                            className={`text-sm font-bold ${
+                              hasUploaded
+                                ? "text-emerald-950"
+                                : "text-slate-800"
+                            }`}
+                          >
+                            {config.label}
+                          </h4>
+                          <p
+                            className={`text-xs mt-0.5 ${
+                              hasUploaded
+                                ? "text-emerald-700 font-medium"
+                                : "text-slate-500"
+                            }`}
+                          >
+                            {config.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      {hasUploaded ? (
+                        <span className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white shrink-0 shadow-2xs">
+                          <CheckCircle2 className="w-3 h-3" />
+                          {matchingFiles.length}{" "}
+                          {matchingFiles.length === 1 ? "file" : "files"}
+                        </span>
+                      ) : (
+                        <span className="whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200/80 text-slate-600 shrink-0">
+                          Empty
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Pre-upload Title Input */}
+                    {config.requiresTitle && (
+                      <div className="mb-3">
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Document Title (for next upload — editable below after upload)
+                        </label>
+                        <input
+                          type="text"
+                          value={pendingTitles[config.key] || ""}
+                          onChange={(e) =>
+                            setPendingTitles((prev) => ({
+                              ...prev,
+                              [config.key]: e.target.value,
+                            }))
+                          }
+                          placeholder={
+                            config.key === "medical_reports"
+                              ? "e.g., Initial Medical Checkup / Final GAMCA Medical Report"
+                              : "e.g., SSC Certificate / HSC Transcript / JLPT N4 Certificate"
+                          }
+                          className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs focus:outline-none focus:border-secondary"
+                        />
+                      </div>
+                    )}
+
+                    {/* Drag and Drop Zone */}
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverKey(config.key);
+                      }}
+                      onDragLeave={() => setDragOverKey(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragOverKey(null);
+                        if (
+                          e.dataTransfer.files &&
+                          e.dataTransfer.files.length > 0
+                        ) {
+                          handleAttachmentFiles(
+                            config.key,
+                            e.dataTransfer.files,
+                            config.multiple,
+                            config.requiresTitle
+                          );
+                        }
+                      }}
+                      onClick={() => fileInputRefs.current[config.key]?.click()}
+                      className={`cursor-pointer rounded-xl border-2 border-dashed p-3.5 text-center transition ${
+                        isDragOver
+                          ? "border-primary bg-primary/5"
+                          : hasUploaded
+                          ? "border-emerald-300 bg-white/80 hover:border-emerald-500 hover:bg-white"
+                          : "border-slate-300 hover:border-secondary bg-white hover:bg-secondary/[0.02]"
+                      }`}
+                    >
+                      <input
+                        ref={(el) => {
+                          fileInputRefs.current[config.key] = el;
+                        }}
+                        type="file"
+                        multiple={true}
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,image/*,application/pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            handleAttachmentFiles(
+                              config.key,
+                              e.target.files,
+                              config.multiple,
+                              config.requiresTitle
+                            );
+                            e.target.value = "";
+                          }
+                        }}
+                      />
+
+                      {isUploading ? (
+                        <div className="py-1.5 flex items-center justify-center gap-2 text-secondary text-xs font-semibold">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Uploading document(s)...</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-center gap-1.5 text-xs text-slate-600">
+                          <Upload className="w-4 h-4 text-secondary shrink-0" />
+                          <span>
+                            <strong className="text-secondary">
+                              Drag &amp; drop
+                            </strong>{" "}
+                            files here, or{" "}
+                            <span className="text-primary font-semibold underline">
+                              browse to add more
+                            </span>{" "}
+                            (PDF or Image • Max 5 MB)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Uploaded Files List */}
+                    {hasUploaded && (
+                      <div className="mt-3 space-y-2">
+                        {matchingFiles.map((att) => {
+                          const formattedFileName = formatAttachmentFileName(
+                            applicantName,
+                            att.title || config.label,
+                            att.file_path || att.file_name
+                          );
+                          const downloadHref = `${att.file_path}${
+                            att.file_path.includes("?") ? "&" : "?"
+                          }download=1&name=${encodeURIComponent(
+                            formattedFileName
+                          )}`;
+
+                          return (
+                            <div
+                              key={att.tempId}
+                              className="p-3 rounded-xl bg-white border border-emerald-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                            >
+                              <div className="min-w-0 flex-1 space-y-1.5">
+                                {config.requiresTitle && (
+                                  <input
+                                    type="text"
+                                    value={att.title}
+                                    onChange={(e) =>
+                                      handleUpdateAttachmentTitle(
+                                        att.tempId,
+                                        e.target.value
+                                      )
+                                    }
+                                    placeholder="Enter Document Title..."
+                                    className="w-full px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-semibold text-secondary focus:outline-none focus:border-primary"
+                                  />
+                                )}
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  <span
+                                    className="text-xs font-bold text-slate-800 truncate"
+                                    title={formattedFileName}
+                                  >
+                                    {formattedFileName}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 shrink-0">
+                                    ({formatFileSize(att.file_size)})
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPreviewItem({
+                                      fileUrl: att.file_path,
+                                      fileName: formattedFileName,
+                                      title: att.title || config.label,
+                                      mimeType: att.mime_type,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary hover:text-white text-xs font-semibold transition"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>View</span>
+                                </button>
+
+                                <a
+                                  href={downloadHref}
+                                  download={formattedFileName}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold transition"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download</span>
+                                </a>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleDeleteAttachment(att.tempId)
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 text-primary hover:bg-primary hover:text-white text-xs font-semibold transition"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -1888,6 +2235,20 @@ export default function StudentForm({
         fileName={previewItem?.fileName || ""}
         title={previewItem?.title}
         mimeType={previewItem?.mimeType}
+      />
+
+      {/* Custom Confirmation Modal for All Delete Actions */}
+      <ConfirmModal
+        isOpen={Boolean(confirmDialog)}
+        onClose={() => setConfirmDialog(null)}
+        onConfirm={() => confirmDialog?.onConfirm()}
+        title={confirmDialog?.title || "Confirm Delete"}
+        message={
+          confirmDialog?.message ||
+          "Are you sure you want to delete this item? This action cannot be undone."
+        }
+        itemName={confirmDialog?.itemName}
+        confirmText={confirmDialog?.confirmText || "Yes, Delete"}
       />
     </div>
   );

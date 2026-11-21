@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import AppShell from "./AppShell";
+import ConfirmModal from "./ConfirmModal";
 import { StudentRecord, STUDENT_STATUSES } from "@/lib/constants";
 import {
   Search,
@@ -31,6 +32,10 @@ export default function StudentListClient() {
   const [statusFilter, setStatusFilter] = useState("");
   const [draftFilter, setDraftFilter] = useState(initialDraftFilter);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
@@ -79,19 +84,20 @@ export default function StudentListClient() {
     }
   }
 
-  async function handleDeleteStudent(studentId: number, name: string) {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete the record for "${name}"? This action cannot be undone.`
-    );
-    if (!confirmed) return;
+  function handleDeleteStudent(studentId: number, name: string) {
+    setDeleteTarget({ id: studentId, name });
+  }
 
-    setDeletingId(studentId);
+  async function confirmDeleteStudent() {
+    if (!deleteTarget) return;
+    setDeletingId(deleteTarget.id);
     try {
-      const res = await fetch(`/api/students/${studentId}`, {
+      const res = await fetch(`/api/students/${deleteTarget.id}`, {
         method: "DELETE",
       });
       if (res.ok) {
-        setStudents((prev) => prev.filter((s) => s.id !== studentId));
+        setStudents((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+        setDeleteTarget(null);
       }
     } catch (err) {
       console.error("Failed to delete student:", err);
@@ -164,8 +170,38 @@ export default function StudentListClient() {
                 className="w-full pl-8 pr-6 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm bg-white focus:outline-none focus:border-secondary"
               >
                 <option value="">All Job Categories</option>
-                <option value="TITP/ESD">TITP / ESD</option>
-                <option value="SSW">SSW</option>
+                <optgroup label="Job Category: TITP / ESD">
+                  <option value="TITP/ESD">All TITP / ESD</option>
+                  <option value="TITP/ESD::Agriculture">
+                    TITP/ESD — Agriculture
+                  </option>
+                  <option value="TITP/ESD::Construction">
+                    TITP/ESD — Construction
+                  </option>
+                  <option value="TITP/ESD::Restaurant / Food Processing">
+                    TITP/ESD — Restaurant / Food Processing
+                  </option>
+                </optgroup>
+                <optgroup label="Job Category: SSW">
+                  <option value="SSW">All SSW</option>
+                  <option value="SSW::Nursing / Caregiver">
+                    SSW — Nursing / Caregiver
+                  </option>
+                  <option value="SSW::Agriculture">
+                    SSW — Agriculture (All)
+                  </option>
+                  <option value="SSW::Agriculture::General Crop Farming">
+                    SSW — Agriculture (General Crop Farming)
+                  </option>
+                  <option value="SSW::Agriculture::General Livestock Farming">
+                    SSW — Agriculture (General Livestock Farming)
+                  </option>
+                  <option value="SSW::Construction">SSW — Construction</option>
+                  <option value="SSW::Building Cleaning">
+                    SSW — Building Cleaning
+                  </option>
+                  <option value="SSW::Driver">SSW — Driver</option>
+                </optgroup>
               </select>
             </div>
 
@@ -640,6 +676,17 @@ export default function StudentListClient() {
           </>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDeleteStudent}
+        title="Delete Student Record?"
+        message="Are you sure you want to permanently delete this student record along with all payment records and uploaded files from the server? This action cannot be undone."
+        itemName={deleteTarget?.name}
+        confirmText="Delete Record"
+        loading={deletingId !== null}
+      />
     </AppShell>
   );
 }

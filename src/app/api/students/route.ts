@@ -16,6 +16,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const search = (searchParams.get("search") || "").trim();
     const jobCategory = searchParams.get("job_category") || "";
+    const jobTrade = searchParams.get("job_trade") || "";
+    const jobSubCategory = searchParams.get("job_sub_category") || "";
     const status = searchParams.get("status") || "";
     const draftFilter = searchParams.get("draft") || "all"; // 'all' | 'published' | 'draft'
 
@@ -24,15 +26,41 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       conditions.push(
-        "(s.applicant_name LIKE ? OR s.company_name LIKE ? OR s.supervising_organization LIKE ? OR s.bd_phone LIKE ? OR s.jp_phone LIKE ? OR s.email LIKE ?)"
+        "(s.applicant_name LIKE ? OR s.company_name LIKE ? OR s.company_address LIKE ? OR s.supervising_organization LIKE ? OR s.bd_phone LIKE ? OR s.jp_phone LIKE ? OR s.email LIKE ?)"
       );
       const q = `%${search}%`;
-      values.push(q, q, q, q, q, q);
+      values.push(q, q, q, q, q, q, q);
     }
 
     if (jobCategory) {
-      conditions.push("s.job_category = ?");
-      values.push(jobCategory);
+      if (jobCategory.includes("::")) {
+        const [cat, trade, sub] = jobCategory.split("::");
+        if (cat) {
+          conditions.push("s.job_category = ?");
+          values.push(cat);
+        }
+        if (trade) {
+          conditions.push("s.job_trade = ?");
+          values.push(trade);
+        }
+        if (sub) {
+          conditions.push("s.job_sub_category = ?");
+          values.push(sub);
+        }
+      } else {
+        conditions.push("s.job_category = ?");
+        values.push(jobCategory);
+      }
+    }
+
+    if (jobTrade) {
+      conditions.push("s.job_trade = ?");
+      values.push(jobTrade);
+    }
+
+    if (jobSubCategory) {
+      conditions.push("s.job_sub_category = ?");
+      values.push(jobSubCategory);
     }
 
     if (status) {
